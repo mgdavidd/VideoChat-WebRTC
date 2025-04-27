@@ -32,12 +32,11 @@ io.on('connection', (socket) => {
         // Notificar a los demás usuarios en la sala sobre el nuevo usuario
         socket.to(roomId).emit('new-user', { userId: socket.id, roomId });
 
-        // obtenemos la informacion del la sala
-        const usersInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || []);
-        const usersWithRoomId = usersInRoom.map(userId => ({ userId, roomId: rooms[userId] }));
-        //envia un array de los usuarios de esa sala exceptuando al usuario que se acaba de unir
-        socket.emit('existing-users', usersWithRoomId.filter(user => user.userId !== socket.id));
     });
+
+    socket.on('update-media-status', (data) => {
+        socket.to(rooms[socket.id]).emit('update-media-status', data)
+    })
 
     // Manejar ofertas, respuestas y candidatos ICE dentro de la sala
     socket.on('offer', (data) => {

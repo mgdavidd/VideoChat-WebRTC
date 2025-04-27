@@ -1,35 +1,35 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sala <%= roomId %></title>
-    <style>
-        video {
-            width: 45%;
-            height: auto;
-        }
-        button {
-            margin: 10px;
-            padding: 10px;
-            font-size: 16px;
-            background-color: blue;
-            color: white;
-        }
-    </style>
-</head>
-<body>
+    <link rel="stylesheet" href="./css/room.css">
+  </head>
+  <body>
     <h1>Bienvenido a la sala: <%= roomId %></h1>
-    <video id="localVideo" autoplay muted></video>
-    <button onclick="changeMedia()">cambiar camara</button>
-    <div id="remoteVideos"></div>
+    <div id="localVideoContainer">
+      <video id="localVideo" autoplay muted></video>
+      <div id="localControls">
+        <button onclick="toggleCamera()" id="btnCamara" class="btnCamara">
+          <img src="./img/camara.png" alt="icono camara" id="iconoCamara" />
+        </button>
+        <button onclick="toggleAudio()" id="btnAudio" class="btnAudio">
+          <img src="./img/audio.png" alt="icono audio" id="iconoAudio" />
+        </button>
+        <button onclick="changeMedia()" class="btnScreen">
+          <img src="./img/compartir-pantalla.png" alt="" id="buttonScreen" />
+        </button>
+      </div>
+      <div id="remoteVideos"></div>
+    </div>
 
     <!-- Incluir Socket.io y el script del cliente -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
-        // Pasar el roomId al cliente
-        const roomId = "<%= roomId %>";
+      // Pasar el roomId al cliente
+      const roomId = "<%= roomId %>";
     </script>
     <script src="/js/client.js"></script>
-</body>
+  </body>
 </html>

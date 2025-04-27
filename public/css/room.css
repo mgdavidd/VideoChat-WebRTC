@@ -1,0 +1,127 @@
+body {
+  background-color: #121212;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+#localVideoContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #121212;
+  padding: 10px 0;
+}
+
+#localVideo {
+  width: 500px;
+  height: 375px;
+  border-radius: 8px;
+  background-color: #000;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+}
+
+#localControls {
+  margin-top: 10px;
+  display: flex;
+  gap: 15px;
+}
+
+#remoteVideos {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 20px;
+  gap: 20px;
+  max-width: 1560px;
+  margin: 0 auto;
+  height: calc(100vh - 300px);
+}
+
+#remoteVideos div {
+  width: 500px;
+  height: 415px; 
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  border: 3px solid transparent;
+  background-image: linear-gradient(to right bottom, #000, #1b4c85);
+  background-clip: padding-box;
+  border-radius: 12px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+  top: 0px
+}
+
+#remoteVideos video {
+  width: 100%;
+  height: 90%;
+  border-radius: 8px;
+  background-color: #000;
+}
+
+#remoteVideos img {
+  position: absolute;
+  width: 30px;
+  height: 30px;
+  filter: invert(100%);
+  opacity: 0.8;
+  transition: opacity 0.3s ease;
+}
+
+#remoteVideos img.no-camera {
+  width: 100%;
+  height: 100%;
+  opacity: 1;
+
+}
+
+#remoteVideos img:hover {
+  opacity: 1;
+}
+
+#remoteVideos .camera-icon {
+  bottom: 10px;
+  left: 10px;
+}
+
+#remoteVideos .microphone-icon {
+  bottom: 10px;
+  right: 10px;
+}
+
+.btnAudio,
+.btnCamara,
+.btnScreen {
+  border: none;
+  background-color: transparent;
+}
+
+.btnCamara img,
+.btnAudio img,
+.btnScreen img {
+  background-color: #1e1e1e;
+  border: 2px solid #3a3a3a;
+  cursor: pointer;
+  height: 60px;
+  width: 60px;
+  border-radius: 50%;
+  object-fit: cover;
+  padding: 5px;
+  transition: background-color 0.3s ease, transform 0.2s ease;
+}
+
+.btnCamara:hover img,
+.btnAudio:hover img,
+.btnScreen:hover img {
+  background-color: #3a3a3a;
+  transform: scale(1.1);
+}
