@@ -1,127 +1,235 @@
+:root {
+  --primary: #4361ee;
+  --secondary: #3a0ca3;
+  --dark: #121212;
+  --dark-gray: #1e1e1e;
+  --light: #ffffff;
+  --border-radius: 12px;
+  --box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+  --transition: all 0.3s ease;
+}
+
+/* Estilos base */
 body {
-  background-color: #121212;
-  color: #ffffff;
-  font-family: Arial, sans-serif;
+  background-color: var(--dark);
+  color: var(--light);
+  font-family: 'Segoe UI', system-ui, sans-serif;
   margin: 0;
   padding: 0;
-  height: 100vh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
 }
 
+h1 {
+  text-align: center;
+  padding: 1rem;
+  margin: 0;
+  background: linear-gradient(135deg, var(--primary), var(--secondary));
+  color: white;
+  font-weight: 500;
+  box-shadow: var(--box-shadow);
+}
+
+/* Contenedor principal */
 #localVideoContainer {
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background-color: #121212;
-  padding: 10px 0;
-}
-
-#localVideo {
-  width: 500px;
-  height: 375px;
-  border-radius: 8px;
-  background-color: #000;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
-}
-
-#localControls {
-  margin-top: 10px;
-  display: flex;
-  gap: 15px;
-}
-
-#remoteVideos {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  padding: 20px;
-  gap: 20px;
-  max-width: 1560px;
-  margin: 0 auto;
-  height: calc(100vh - 300px);
-}
-
-#remoteVideos div {
-  width: 500px;
-  height: 415px; 
+  max-width: 800px;
+  margin: 1.5rem auto;
+  padding: 1rem;
+  background-color: var(--dark-gray);
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow);
   position: relative;
+}
+
+/* Video local */
+#localVideo {
+  width: 100%;
+  max-height: 60vh;
+  border-radius: var(--border-radius);
+  background-color: #000;
+  aspect-ratio: 16/9;
+  object-fit: cover;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* Controles locales */
+#localControls {
   display: flex;
-  flex-direction: column;
+  justify-content: center;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+  width: 100%;
+  padding: 0 1rem;
+}
+
+#localControls button {
+  background-color: rgba(30, 30, 30, 0.8);
+  border: 2px solid var(--primary);
+  border-radius: 50%;
+  width: 3.5rem;
+  height: 3.5rem;
+  display: flex;
   align-items: center;
-  border: 3px solid transparent;
-  background-image: linear-gradient(to right bottom, #000, #1b4c85);
-  background-clip: padding-box;
-  border-radius: 12px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.5);
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+#localControls button:hover {
+  background-color: var(--primary);
+  transform: scale(1.1);
+}
+
+#localControls button img {
+  width: 60%;
+  height: 60%;
+  filter: invert(1);
+  transition: var(--transition);
+}
+
+/* Videos remotos */
+#remoteVideos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr));
+  gap: 1.5rem;
+  padding: 1rem;
+  width: 100%;
+  max-width: 1800px;
+  margin: 0 auto;
+}
+
+#remoteVideos > div {
+  position: relative;
+  background-color: var(--dark-gray);
+  border-radius: var(--border-radius);
   overflow: hidden;
-  top: 0px
+  aspect-ratio: 16/9;
+  box-shadow: var(--box-shadow);
 }
 
 #remoteVideos video {
   width: 100%;
-  height: 90%;
-  border-radius: 8px;
+  height: 100%;
+  object-fit: cover;
   background-color: #000;
 }
 
+/* Iconos de estado remotos */
 #remoteVideos img {
   position: absolute;
-  width: 30px;
-  height: 30px;
-  filter: invert(100%);
+  width: 1.5rem;
+  height: 1.5rem;
+  filter: invert(1);
   opacity: 0.8;
-  transition: opacity 0.3s ease;
-}
-
-#remoteVideos img.no-camera {
-  width: 100%;
-  height: 100%;
-  opacity: 1;
-
+  z-index: 10;
 }
 
 #remoteVideos img:hover {
   opacity: 1;
 }
 
-#remoteVideos .camera-icon {
-  bottom: 10px;
-  left: 10px;
+.no-camera {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 50% !important;
+  height: auto !important;
+  opacity: 0.2;
 }
 
-#remoteVideos .microphone-icon {
-  bottom: 10px;
-  right: 10px;
+.camera-icon {
+  bottom: 0.5rem;
+  left: 0.5rem;
 }
 
-.btnAudio,
-.btnCamara,
-.btnScreen {
+.microphone-icon {
+  bottom: 0.5rem;
+  right: 0.5rem;
+}
+
+.screen-share-icon {
+  bottom: 0.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Botón pantalla completa */
+.fullscreen-remote-button {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  background-color: rgba(30, 30, 30, 0.7);
   border: none;
-  background-color: transparent;
-}
-
-.btnCamara img,
-.btnAudio img,
-.btnScreen img {
-  background-color: #1e1e1e;
-  border: 2px solid #3a3a3a;
-  cursor: pointer;
-  height: 60px;
-  width: 60px;
   border-radius: 50%;
-  object-fit: cover;
-  padding: 5px;
-  transition: background-color 0.3s ease, transform 0.2s ease;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: var(--transition);
 }
 
-.btnCamara:hover img,
-.btnAudio:hover img,
-.btnScreen:hover img {
-  background-color: #3a3a3a;
+.fullscreen-remote-button:hover {
+  background-color: var(--primary);
   transform: scale(1.1);
+}
+
+.fullscreen-remote-button img {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  #localControls {
+    gap: 1rem;
+  }
+  
+  #localControls button {
+    width: 3rem;
+    height: 3rem;
+  }
+  
+  #remoteVideos {
+    grid-template-columns: 1fr;
+    padding: 0.5rem;
+    gap: 1rem;
+  }
+  
+  #remoteVideos img {
+    width: 1.2rem;
+    height: 1.2rem;
+  }
+}
+
+@media (max-width: 480px) {
+  h1 {
+    font-size: 1.2rem;
+    padding: 0.8rem;
+  }
+  
+  #localVideoContainer {
+    margin: 1rem auto;
+    padding: 0.8rem;
+  }
+  
+  #localControls {
+    gap: 0.8rem;
+  }
+  
+  #localControls button {
+    width: 2.8rem;
+    height: 2.8rem;
+  }
+  
+  .fullscreen-remote-button {
+    width: 1.8rem;
+    height: 1.8rem;
+  }
 }

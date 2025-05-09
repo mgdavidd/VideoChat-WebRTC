@@ -11,6 +11,7 @@
     <div id="localVideoContainer">
       <video id="localVideo" autoplay muted></video>
       <div id="localControls">
+        <!-- Botones de control -->
         <button onclick="toggleCamera()" id="btnCamara" class="btnCamara">
           <img src="./img/camara.png" alt="icono camara" id="iconoCamara" />
         </button>
@@ -20,9 +21,12 @@
         <button onclick="changeMedia()" class="btnScreen">
           <img src="./img/compartir-pantalla.png" alt="" id="buttonScreen" />
         </button>
+        <button class="btnFullScreen" id="btnFullScreen">
+          <img src="./img/pantalla-completa.png" alt="Pantalla completa" />
+        </button>
       </div>
-      <div id="remoteVideos"></div>
     </div>
+    <div id="remoteVideos"></div>
 
     <!-- Incluir Socket.io y el script del cliente -->
     <script src="/socket.io/socket.io.js"></script>
@@ -30,6 +34,6 @@
       // Pasar el roomId al cliente
       const roomId = "<%= roomId %>";
     </script>
-    <script src="/js/client.js"></script>
+    <script src="/js/client.js" type="module"></script>
   </body>
 </html>

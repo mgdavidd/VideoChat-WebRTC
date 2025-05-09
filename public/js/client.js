@@ -1,10 +1,11 @@
+import { createRemoteVideoElement, updateMediaStatus } from "./dom_elements.js";
+
 const socket = io();
 socket.emit("join-room", roomId);
 
 const localVideo = document.getElementById("localVideo");
-const remoteVideos = document.getElementById("remoteVideos");
 
-noCameraImg = document.createElement("img");
+const noCameraImg = document.createElement("img");
 noCameraImg.src = "./img/no-camara.png";
 noCameraImg.classList.add("no-camera");
 
@@ -16,7 +17,6 @@ const iceCandidateQueue = {};
 const pendingOffers = [];
 
 let localStream = null;
-let audioTrack = null;
 let camera = true;
 
 async function addIceCandidates(userId, peerConnection) {
@@ -38,12 +38,12 @@ socket.on("new-user", ({ userId, roomId: remoteRoomId }) => {
     createPeerConnection(userId);
   }
 
-  const remoteVideo = document.getElementById(userId) || createRemoteVideoElement(userId); 
   //enviamos los medios
   socket.emit("update-media-status", {
     camera: localStream.getVideoTracks()[0].enabled,
     microphone: localStream.getAudioTracks()[0].enabled,
-    userId: socket.id
+    userId: socket.id,
+    screenSharing: camera
   })
   console.log('new-user', localStream.getVideoTracks()[0].enabled,localStream.getAudioTracks()[0].enabled, socket.id)
 });
@@ -181,6 +181,7 @@ function toggleCamera() {
       camera: videoTrack.enabled,
       microphone: audioTrack ? audioTrack.enabled : false, // Incluir el estado del micrófono
       userId: socket.id,
+      screenSharing: camera
     });
   }
 }
@@ -202,6 +203,7 @@ function toggleAudio() {
       camera: videoTrack ? videoTrack.enabled : false, // Incluir el estado de la cámara
       microphone: audioTrack.enabled,
       userId: socket.id,
+      screenSharing: camera
     });
   }
 }
@@ -289,74 +291,11 @@ async function handleOffer(data) {
   addIceCandidates(data.sender, peerConnection);
 }
 
-// Función para crear un elemento de video remoto
-function createRemoteVideoElement(userId) {
-  // Crear un contenedor para el video y los íconos
-  const container = document.createElement("div");
-  container.id = `user-container-${userId}`;
-
-  // Crear el elemento de video
-  const remoteVideo = document.createElement("video");
-  remoteVideo.id = userId;
-  remoteVideo.autoplay = true;
-
-  // Crear el ícono de la cámara
-  const cameraIcon = document.createElement("img");
-  cameraIcon.id = `cameraIcon-${userId}`;
-  cameraIcon.src = "./img/camara.png"; // Ícono inicial de cámara encendida
-  cameraIcon.alt = "Estado de la cámara";
-  cameraIcon.classList.add("camera-icon");
-
-  // Crear el ícono del micrófono
-  const microphoneIcon = document.createElement("img");
-  microphoneIcon.id = `microphone-icon-${userId}`;
-  microphoneIcon.src = "./img/audio.png";
-  microphoneIcon.alt = "Estado del micrófono";
-  microphoneIcon.classList.add("microphone-icon");
-
-  const noCameraImg = document.createElement("img");
-  noCameraImg.id = `noCameraImg-${userId}`;
-  noCameraImg.src = "./img/no-camara.png";
-  noCameraImg.classList.add("no-camera");
-  noCameraImg.style.display = "none"; // Ocultar por defecto
-
-  // Agregar el video, la imagen de "no cámara" y los íconos al contenedor
-  container.appendChild(remoteVideo);
-  container.appendChild(noCameraImg);
-  container.appendChild(cameraIcon);
-  container.appendChild(microphoneIcon);
-
-  // Agregar el contenedor al elemento de videos remotos
-  remoteVideos.appendChild(container);
-
-  return remoteVideo;
-}
-
 socket.on("update-media-status", (data) => {
-  const { userId, camera, microphone } = data;
-  const div = document.getElementById(`user-container-${userId}`);
-  const remoteVideo = document.getElementById(userId) || createRemoteVideoElement(userId);
+  const { userId, camera, microphone, screenSharing } = data;
+  document.getElementById(userId) || createRemoteVideoElement(userId);
 
-  const remoteCameraIcon = document.getElementById(`cameraIcon-${userId}`);
-  if (remoteCameraIcon) {
-    remoteCameraIcon.src = camera
-      ? "./img/camara.png"
-      : "./img/no-camara.png";
-
-    // Manejar la visibilidad de la imagen de "no cámara" específica del usuario
-    const noCameraImg = document.getElementById(`noCameraImg-${userId}`);
-    if (noCameraImg) {
-      noCameraImg.style.display = camera ? "none" : "block";
-    }
-    remoteVideo.style.display = camera ? "block" : "none"; // Mostrar/ocultar el video
-  }
-
-  const remoteMicrophoneIcon = document.getElementById(`microphone-icon-${userId}`);
-  if (remoteMicrophoneIcon) {
-    remoteMicrophoneIcon.src = microphone
-      ? "./img/audio.png"
-      : "./img/mute.png";
-  }
+  updateMediaStatus(userId, camera, microphone, screenSharing);
 });
 
 socket.on("offer", (data) => {
@@ -391,4 +330,9 @@ socket.on("candidate", async (data) => {
     }
   }
 });
+
+window.toggleAudio = toggleAudio;
+window.toggleCamera = toggleCamera;
+window.changeMedia = changeMedia;
+
 // link diagrama: https://excalidraw.com/#json=QY3qZ_DeMLhAC4DeMhUlz,0oRz92miFTRE5PR-DVFQiw
