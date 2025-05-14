@@ -1,13 +1,9 @@
 import { createRemoteVideoElement, updateMediaStatus } from "./dom_elements.js";
 
 const socket = io();
-socket.emit("join-room", roomId);
+let users = {};
 
 const localVideo = document.getElementById("localVideo");
-
-const noCameraImg = document.createElement("img");
-noCameraImg.src = "./img/no-camara.png";
-noCameraImg.classList.add("no-camera");
 
 const configuration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
@@ -32,20 +28,17 @@ async function addIceCandidates(userId, peerConnection) {
   }
 }
 
-// Configurar eventos de socket
-socket.on("new-user", ({ userId, roomId: remoteRoomId }) => {
-  if (localStream && roomId === remoteRoomId) {
-    createPeerConnection(userId);
-  }
+// Evento para el usuario nuevo (solo crea conexiones y envía offer)
+socket.on("users-in-room", (usersArray) => {
+  usersArray.forEach(({ userId, userName }) => {
+    users[userId] = userName;
+    createPeerConnection(userId, users[userId]); // El nuevo crea la conexión y envía offer
+  });
+});
 
-  //enviamos los medios
-  socket.emit("update-media-status", {
-    camera: localStream.getVideoTracks()[0].enabled,
-    microphone: localStream.getAudioTracks()[0].enabled,
-    userId: socket.id,
-    screenSharing: camera
-  })
-  console.log('new-user', localStream.getVideoTracks()[0].enabled,localStream.getAudioTracks()[0].enabled, socket.id)
+// Evento para los usuarios viejos (NO crean conexión aquí, solo esperan offer)
+socket.on("new-user", ({ userId, roomId: remoteRoomId, userName}) => {
+  users[userId] = userName;
 });
 
 socket.on("user-disconnected", (userId) => {
@@ -124,14 +117,23 @@ async function changeMedia() {
     updateLocalStream(stream);
     camera = !camera;
 
+    // Actualizar estado de cámara y micrófono después de cambiar el stream
+    const videoTrack = localStream.getVideoTracks()[0];
+    const audioTrack = localStream.getAudioTracks()[0];
+    const isCameraOn = videoTrack ? videoTrack.enabled : false;
+    const isMicOn = audioTrack ? audioTrack.enabled : false;
+
+    socket.emit("update-media-status", {
+      camera: isCameraOn,
+      microphone: isMicOn,
+      userId: socket.id,
+      screenSharing: camera,
+    });
+
     // Procesar ofertas pendientes
     pendingOffers.forEach(handleOffer);
     pendingOffers.length = 0; // Limpiar la cola de ofertas pendientes
 
-    // Notificar a los demás usuarios que el stream ha cambiado
-    Object.keys(peerConnections).forEach((userId) => {
-      createPeerConnection(userId);
-    });
   } catch (error) {
     console.error("❌ Error accediendo a dispositivos multimedia:", error);
     alert(
@@ -161,55 +163,70 @@ async function mixAudioStreams(stream1, stream2) {
   return destination.stream;
 }
 
-changeMedia();
-
 function toggleCamera() {
   const videoTrack = localStream.getVideoTracks()[0];
-  const audioTrack = localStream.getAudioTracks()[0]; // Obtener el estado actual del micrófono
+  const audioTrack = localStream.getAudioTracks()[0];
 
   if (videoTrack) {
     videoTrack.enabled = !videoTrack.enabled;
-    console.log(`🎥 Cámara ${videoTrack.enabled ? "encendida" : "apagada"}`);
+    const isCameraOn = videoTrack.enabled;
+    const isMicOn = audioTrack ? audioTrack.enabled : false;
 
     // Cambiar el ícono del botón
     const iconoCamara = document.getElementById("iconoCamara");
-    iconoCamara.src = videoTrack.enabled
+    iconoCamara.src = isCameraOn
       ? "./img/camara.png"
-      : "./img/no-camara.png";    
+      : "./img/no-camara.png";
+
+    // Log correcto
+    console.log(`🎥 Cámara ${isCameraOn ? "encendida" : "apagada"}`, {
+      isCameraOn,
+      isMicOn,
+      screenSharing: !camera,
+      userId: socket.id,
+    });
 
     socket.emit("update-media-status", {
-      camera: videoTrack.enabled,
-      microphone: audioTrack ? audioTrack.enabled : false, // Incluir el estado del micrófono
+      camera: isCameraOn,
+      microphone: isMicOn,
       userId: socket.id,
-      screenSharing: camera
+      screenSharing: camera, // true si está compartiendo pantalla
     });
   }
 }
 
 function toggleAudio() {
   const audioTrack = localStream.getAudioTracks()[0];
-  const videoTrack = localStream.getVideoTracks()[0]; // Obtener el estado actual de la cámara
+  const videoTrack = localStream.getVideoTracks()[0];
 
   if (audioTrack) {
     audioTrack.enabled = !audioTrack.enabled;
-    console.log(`🎙️ Micrófono ${audioTrack.enabled ? "encendido" : "apagado"}`);
+    const isMicOn = audioTrack.enabled;
+    const isCameraOn = videoTrack ? videoTrack.enabled : false;
 
     // Cambiar el ícono del botón
     const iconoAudio = document.getElementById("iconoAudio");
-    iconoAudio.src = audioTrack.enabled ? "./img/audio.png" : "./img/mute.png";
+    iconoAudio.src = isMicOn ? "./img/audio.png" : "./img/mute.png";
 
-    // Emitir el estado de ambos medios
-    socket.emit("update-media-status", {
-      camera: videoTrack ? videoTrack.enabled : false, // Incluir el estado de la cámara
-      microphone: audioTrack.enabled,
+    // Log correcto
+    console.log(`🎙️ Micrófono ${isMicOn ? "encendido" : "apagado"}`, {
+      isCameraOn,
+      isMicOn,
+      screenSharing: !camera,
       userId: socket.id,
-      screenSharing: camera
+    });
+
+    socket.emit("update-media-status", {
+      camera: isCameraOn,
+      microphone: isMicOn,
+      userId: socket.id,
+      screenSharing: camera,
     });
   }
 }
 
 // Función para crear una conexión peer-to-peer
-function createPeerConnection(userId) {
+function createPeerConnection(userId, userName) {
   if (peerConnections[userId]) {
     console.log(`🔗 Conexión ya existente con ${userId}`);
     return;
@@ -235,8 +252,9 @@ function createPeerConnection(userId) {
   peerConnection.ontrack = (event) => {
     //si no puede obtener el elemento, lo crea
     const remoteVideo =
-      document.getElementById(userId) || createRemoteVideoElement(userId);
+      document.getElementById(userId) || createRemoteVideoElement(userId, userName);
     remoteVideo.srcObject = event.streams[0];
+    console.log(users)
   };
 
   // Crear oferta y enviarla al otro usuario
@@ -277,7 +295,7 @@ async function handleOffer(data) {
   peerConnection.ontrack = (event) => {
     const remoteVideo =
       document.getElementById(data.sender) ||
-      createRemoteVideoElement(data.sender);
+      createRemoteVideoElement(data.sender, users[data.sender]);
     remoteVideo.srcObject = event.streams[0];
   };
 
@@ -291,28 +309,36 @@ async function handleOffer(data) {
   addIceCandidates(data.sender, peerConnection);
 }
 
+async function start() {
+  await changeMedia(); // Esto inicializa localStream
+  socket.emit("join-room", { roomId, userName: userNameLocal });
+}
+start();
+
 socket.on("update-media-status", (data) => {
   const { userId, camera, microphone, screenSharing } = data;
-  document.getElementById(userId) || createRemoteVideoElement(userId);
+  document.getElementById(userId) || createRemoteVideoElement(userId, users[userId]);
 
   updateMediaStatus(userId, camera, microphone, screenSharing);
 });
 
 socket.on("offer", (data) => {
   if (localStream) {
-    console.log("handleOffer");
-    handleOffer(data);
+    handleOffer(data); // Aquí sí creas la conexión si no existe
   } else {
-    console.log("pendingoffers");
     pendingOffers.push(data);
   }
 });
 
 socket.on("answer", async (data) => {
-  await peerConnections[data.sender].setRemoteDescription(
-    new RTCSessionDescription(data.answer)
-  );
-  addIceCandidates(data.sender, peerConnections[data.sender]);
+  const pc = peerConnections[data.sender];
+  if (!pc) return;
+  if (pc.signalingState !== "stable") {
+    await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+    addIceCandidates(data.sender, pc);
+  } else {
+    return;
+  }
 });
 
 socket.on("candidate", async (data) => {

@@ -4,7 +4,7 @@ const noCameraImg = document.createElement("img");
 noCameraImg.src = "./img/no-camara.png";
 noCameraImg.classList.add("no-camera");
 
-export function createRemoteVideoElement(userId) {
+export function createRemoteVideoElement(userId, userName) {
     // Crear un contenedor para el video y los íconos
     const container = document.createElement("div");
     container.id = `user-container-${userId}`;
@@ -37,7 +37,7 @@ export function createRemoteVideoElement(userId) {
     //crear el ícono de pantalla compartida
     const screenShareIcon = document.createElement("img");
     screenShareIcon.id = `screen-share-icon-${userId}`;
-    screenShareIcon.src = "./img/compartir-pantalla.png";
+    screenShareIcon.src = "./img/no-pantalla.png";
     screenShareIcon.alt = "Estado de la pantalla compartida";
     screenShareIcon.classList.add("screen-share-icon");
 
@@ -48,17 +48,15 @@ export function createRemoteVideoElement(userId) {
     fullScreenButton.innerHTML = `<img src="./img/pantalla-completa.png" alt="Pantalla completa">`;
     fullScreenButton.addEventListener("click", () => {
         const videoElement = document.getElementById(userId);
-        if (videoElement.requestFullscreen) {
-            videoElement.requestFullscreen();
-        } else if (videoElement.mozRequestFullScreen) { // Firefox
-            videoElement.mozRequestFullScreen();
-        } else if (videoElement.webkitRequestFullscreen) { // Chrome, Safari y Opera
-            videoElement.webkitRequestFullscreen();
-        } else if (videoElement.msRequestFullscreen) { // IE/Edge
-            videoElement.msRequestFullscreen();
-        }
-
+        (videoElement.requestFullscreen?.() ||
+        videoElement.mozRequestFullScreen?.() ||
+        videoElement.webkitRequestFullscreen?.() ||
+        videoElement.msRequestFullscreen?.());
     })
+
+    const userNameElement = document.createElement("p");
+    userNameElement.textContent = userName;
+    userNameElement.classList.add("user-name");
   
     // Agregar el video, la imagen de "no cámara" y los íconos al contenedor
     container.appendChild(remoteVideo);
@@ -67,6 +65,7 @@ export function createRemoteVideoElement(userId) {
     container.appendChild(microphoneIcon);
     container.appendChild(screenShareIcon);
     container.appendChild(fullScreenButton);
+    container.appendChild(userNameElement);
 
     // Agregar el contenedor al elemento de videos remotos
     remoteVideos.appendChild(container);
@@ -75,32 +74,41 @@ export function createRemoteVideoElement(userId) {
 }
 
 export function updateMediaStatus(userId, cameraStatus, microphoneStatus, screenShareStatus) {
+    console.log('estados', userId, cameraStatus, microphoneStatus, screenShareStatus)
     const remoteVideo = document.getElementById(userId)
     const cameraIcon = document.getElementById(`cameraIcon-${userId}`);
     const microphoneIcon = document.getElementById(`microphone-icon-${userId}`);
     const screenShareIcon = document.getElementById(`screen-share-icon-${userId}`);
     const noCameraImg = document.getElementById(`noCameraImg-${userId}`);
+    const fullScreenButton = document.getElementById(`fullscreen-button-${userId}`);
 
+    // Cámara
     if (cameraStatus) {
-        cameraIcon.src = "./img/camara.png"; // Ícono de cámara encendida
-        noCameraImg.style.display = "none"; // Ocultar imagen de "no cámara"
-        remoteVideo.style.display = "block"
+        cameraIcon.src = "./img/camara.png";
+        noCameraImg.style.display = "none";
+        remoteVideo.style.display = "block";
     } else {
-        cameraIcon.src = "./img/no-camara.png"; // Ícono de cámara apagada
-        noCameraImg.style.display = "block"; // Mostrar imagen de "no cámara"
-        noCameraImg.style.backgroundColor = "transparent"; // Mostrar imagen de "no cámara"
-        remoteVideo.style.display = "none"
+        cameraIcon.src = "./img/no-camara.png";
+        noCameraImg.style.display = "block";
+        noCameraImg.style.backgroundColor = "transparent";
+        remoteVideo.style.display = "none";
     }
 
-    // Actualizar el estado del micrófono
-    microphoneIcon.src = microphoneStatus ? "./img/audio.png" : "./img/mute.png";
+    // Micrófono
+    if (microphoneIcon) {
+        microphoneIcon.src = microphoneStatus ? "./img/audio.png" : "./img/mute.png";
+    }
 
-    // Actualizar el estado de la pantalla compartida
-    screenShareIcon.src = screenShareStatus ? "./img/compartir-pantalla.png" : "./img/no-pantalla.png";
-    if(screenShareStatus) {
-        document.getElementById(`fullscreen-button-${userId}`).style.filter = "invert(0)"
-    }else{
-        document.getElementById(`fullscreen-button-${userId}`).style.filter = "invert(100%)"
+    // Pantalla compartida
+    if (screenShareIcon) {
+        screenShareIcon.src = screenShareStatus
+            ? "./img/compartir-pantalla.png"
+            : "./img/no-pantalla.png";
+    }
+
+    // Botón de pantalla completa (opcional)
+    if (fullScreenButton) {
+        fullScreenButton.style.filter = screenShareStatus ? "invert(0)" : "invert(100%)";
     }
 }
 
