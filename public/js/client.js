@@ -8,7 +8,7 @@ const localVideo = document.getElementById("localVideo");
 const configuration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
 };
-const peerConnections = {};
+let peerConnections = {};
 const iceCandidateQueue = {};
 const pendingOffers = [];
 
@@ -225,6 +225,22 @@ function toggleAudio() {
   }
 }
 
+function exitButton() {
+  // Cerrar todas las conexiones y detener el stream local
+  Object.values(peerConnections).forEach((pc) => {
+    pc.close();
+  });
+  peerConnections = {};
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+    localStream = null;
+  }
+  document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  window.location.href = "/";
+  console.log('cerrando')
+}
+
+
 // Función para crear una conexión peer-to-peer
 function createPeerConnection(userId, userName) {
   if (peerConnections[userId]) {
@@ -252,7 +268,7 @@ function createPeerConnection(userId, userName) {
   peerConnection.ontrack = (event) => {
     //si no puede obtener el elemento, lo crea
     const remoteVideo =
-      document.getElementById(userId) || createRemoteVideoElement(userId, userName);
+      document.getElementById(userId) || createRemoteVideoElement(userId, userName, socket, userNameLocal);
     remoteVideo.srcObject = event.streams[0];
     console.log(users)
   };
@@ -295,7 +311,7 @@ async function handleOffer(data) {
   peerConnection.ontrack = (event) => {
     const remoteVideo =
       document.getElementById(data.sender) ||
-      createRemoteVideoElement(data.sender, users[data.sender]);
+      createRemoteVideoElement(data.sender, users[data.sender], socket, userNameLocal);
     remoteVideo.srcObject = event.streams[0];
   };
 
@@ -317,7 +333,7 @@ start();
 
 socket.on("update-media-status", (data) => {
   const { userId, camera, microphone, screenSharing } = data;
-  document.getElementById(userId) || createRemoteVideoElement(userId, users[userId]);
+  document.getElementById(userId) || createRemoteVideoElement(userId, users[userId], socket, userNameLocal);
 
   updateMediaStatus(userId, camera, microphone, screenSharing);
 });
@@ -357,8 +373,15 @@ socket.on("candidate", async (data) => {
   }
 });
 
+socket.on("kicked", () => {
+    alert("Has sido expulsado de la sala por el administrador.");
+    document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    window.location.href = "/";
+});
+
 window.toggleAudio = toggleAudio;
 window.toggleCamera = toggleCamera;
 window.changeMedia = changeMedia;
+window.exitButton = exitButton;
 
 // link diagrama: https://excalidraw.com/#json=QY3qZ_DeMLhAC4DeMhUlz,0oRz92miFTRE5PR-DVFQiw

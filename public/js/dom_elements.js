@@ -4,10 +4,23 @@ const noCameraImg = document.createElement("img");
 noCameraImg.src = "./img/no-camara.png";
 noCameraImg.classList.add("no-camera");
 
-export function createRemoteVideoElement(userId, userName) {
+export function createRemoteVideoElement(userId, userName, socket, userNameLocal) {
     // Crear un contenedor para el video y los íconos
     const container = document.createElement("div");
     container.id = `user-container-${userId}`;
+
+        if(userNameLocal === "David") {
+        const expellable = document.createElement("button");
+        expellable.id = `expellable-${userId}`;
+        expellable.classList.add("expel-button");
+        const image = document.createElement("img");
+        image.src = "./img/expulsar.png";
+        expellable.appendChild(image);
+        expellable.addEventListener("click", () => {
+            socket.emit("kick-user", { targetId: userId });
+        });
+        container.appendChild(expellable);
+    }
   
     // Crear el elemento de video
     const remoteVideo = document.createElement("video");
@@ -57,7 +70,7 @@ export function createRemoteVideoElement(userId, userName) {
     const userNameElement = document.createElement("p");
     userNameElement.textContent = userName;
     userNameElement.classList.add("user-name");
-  
+
     // Agregar el video, la imagen de "no cámara" y los íconos al contenedor
     container.appendChild(remoteVideo);
     container.appendChild(noCameraImg);
@@ -106,7 +119,6 @@ export function updateMediaStatus(userId, cameraStatus, microphoneStatus, screen
             : "./img/no-pantalla.png";
     }
 
-    // Botón de pantalla completa (opcional)
     if (fullScreenButton) {
         fullScreenButton.style.filter = screenShareStatus ? "invert(0)" : "invert(100%)";
     }

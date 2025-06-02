@@ -281,3 +281,35 @@ h1 {
     padding: 0.18rem 0.5rem;
   }
 }
+
+/* Botón de expulsar (expellable) */
+.expel-button {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  background: rgba(220, 53, 69, 0.85); /* rojo suave */
+  border: none;
+  border-radius: 50%;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 20;
+  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 8px rgba(220,53,69,0.08);
+}
+
+.expel-button img {
+  width: 1.1rem;
+  height: 1.1rem;
+  filter: invert(1);
+  pointer-events: none;
+}
+
+.expel-button:hover {
+  background: #dc3545; /* rojo más fuerte */
+  transform: scale(1.1) rotate(-10deg);
+  box-shadow: 0 4px 16px rgba(220,53,69,0.18);
+}

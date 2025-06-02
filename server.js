@@ -92,6 +92,14 @@ io.on('connection', (socket) => {
   socket.on('candidate', (data) => {
     socket.to(data.target).emit('candidate', { candidate: data.candidate, sender: socket.id });
   });
+
+  socket.on("kick-user", ({ targetId }) => {
+    if (rooms[socket.roomId] && rooms[socket.roomId][socket.id] === "David") {
+      io.to(targetId).emit("kicked");
+      // Opcional: eliminarlo de la sala en tu estructura
+      delete rooms[socket.roomId][targetId];
+    }
+  });
 });
 
 // Iniciar el servidor
