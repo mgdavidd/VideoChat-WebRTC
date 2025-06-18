@@ -10,6 +10,7 @@ const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
 const { DateTime } = require("luxon");
+const session = require("express-session");
 
 // Configuración inicial
 dotenv.config();
@@ -56,14 +57,19 @@ app.use(cookieParser());
 app.use(express.json({ limit: "500mb" }));
 app.use(express.urlencoded({ extended: true, limit: "500mb" }));
 app.use(express.static(path.join(__dirname, "public")));
+app.use(session({
+  secret: process.env.SESSION_SECRET || "secretoseguro",
+  resave: false,
+  saveUninitialized: true,
+}));
 
 server.headersTimeout = 600000;
 server.keepAliveTimeout = 600000;
 
 // Middleware de autenticación
 const allowedPaths = [
-  "/", "/signup", "/login", "/join", "/calendar-form", 
-  "/fechas", "/auth/google", "/auth/google/callback", "/choose-username"
+  "/", "/signup", "/login", "/join", "/fechas",
+  "/auth/google", "/auth/google/callback", "/choose-username"
 ];
 
 app.use(async (req, res, next) => {
