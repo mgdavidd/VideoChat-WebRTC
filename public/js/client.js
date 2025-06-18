@@ -3,6 +3,9 @@ import { createRemoteVideoElement, updateMediaStatus } from "./dom_elements.js";
 const socket = io();
 let users = {};
 
+let mediaRecorder;
+let recordedChunks = [];
+
 const localVideo = document.getElementById("localVideo");
 
 const configuration = {
@@ -14,6 +17,271 @@ const pendingOffers = [];
 
 let localStream = null;
 let camera = true;
+
+// Evento para el usuario nuevo (solo crea conexiones y envía offer)
+socket.on("users-in-room", (usersArray) => {
+  usersArray.forEach(({ userId, userName }) => {
+    users[userId] = userName;
+    createPeerConnection(userId, users[userId]);
+  });
+});
+
+// Evento para los usuarios viejos (NO crean conexión aquí, solo esperan offer)
+socket.on("new-user", ({ userId, roomId: remoteRoomId, userName }) => {
+  users[userId] = userName;
+});
+
+socket.on("user-disconnected", (userId) => {
+  if (peerConnections[userId]) {
+    peerConnections[userId].close();
+    delete peerConnections[userId];
+    document.getElementById(userId)?.remove();
+    document.getElementById(`user-container-${userId}`)?.remove();
+  }
+});
+
+// Actualizar stream local
+function updateLocalStream(newStream) {
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+  }
+  localStream = newStream;
+  localVideo.srcObject = localStream;
+  localVideo.muted = true;
+
+  Object.values(peerConnections).forEach((pc) => {
+    const senders = pc.getSenders();
+    senders.forEach((sender) => {
+      const newTrack = localStream
+        .getTracks()
+        .find((track) => track.kind === sender.track.kind);
+      if (newTrack) {
+        sender.replaceTrack(newTrack);
+      }
+    });
+  });
+}
+
+function stopRecordingAndUpload() {
+  return new Promise((resolve) => {
+    if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      mediaRecorder.onstop = async function () {
+        const blob = new Blob(recordedChunks, { type: "video/webm" });
+        const formData = new FormData();
+        formData.append("recording", blob, "grabacion.webm");
+        formData.append("roomId", roomId);
+        formData.append("adminUserName", userNameLocal);
+
+        try {
+          const res = await fetch("/api/upload-recording", {
+            method: "POST",
+            body: formData,
+          });
+
+          const result = await res.json();
+          console.log("Resultado de subida:", result);
+        } catch (err) {
+          console.error("Error al subir grabación:", err);
+        }
+
+        resolve();
+      };
+
+      mediaRecorder.stop();
+    } else {
+      resolve();
+    }
+  });
+}
+
+
+async function changeMedia() {
+  const buttonMedia = document.getElementById("buttonScreen");
+  try {
+    let stream;
+
+    if (camera) {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: true,
+      });
+      buttonMedia.src = "/img/compartir-pantalla.png";
+    } else {
+      const screenStream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: true,
+      });
+
+      const audioStream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+      });
+
+      const mixedAudio = await mixAudioStreams(screenStream, audioStream);
+      const videoTrack = screenStream.getVideoTracks()[0];
+      stream = new MediaStream([videoTrack, ...mixedAudio.getAudioTracks()]);
+      buttonMedia.src = "/img/no-pantalla.png";
+    }
+
+    updateLocalStream(stream);
+    camera = !camera;
+
+    const videoTrack = localStream.getVideoTracks()[0];
+    const audioTrack = localStream.getAudioTracks()[0];
+    socket.emit("update-media-status", {
+      camera: videoTrack?.enabled || false,
+      microphone: audioTrack?.enabled || false,
+      userId: socket.id,
+      screenSharing: !camera,
+    });
+  } catch (error) {
+    console.error("Error en changeMedia:", error);
+  }
+}
+
+async function mixAudioStreams(stream1, stream2) {
+  const audioContext = new AudioContext();
+  const source1 = audioContext.createMediaStreamSource(stream1);
+  const source2 = audioContext.createMediaStreamSource(stream2);
+  const destination = audioContext.createMediaStreamDestination();
+
+  source1.connect(destination);
+  source2.connect(destination);
+
+  return destination.stream;
+}
+
+function toggleCamera() {
+  const videoTrack = localStream.getVideoTracks()[0];
+  const audioTrack = localStream.getAudioTracks()[0];
+
+  if (videoTrack) {
+    videoTrack.enabled = !videoTrack.enabled;
+    const isCameraOn = videoTrack.enabled;
+    const isMicOn = audioTrack ? audioTrack.enabled : false;
+
+    const iconoCamara = document.getElementById("iconoCamara");
+    iconoCamara.src = isCameraOn ? "/img/camara.png" : "/img/no-camara.png";
+
+    socket.emit("update-media-status", {
+      camera: isCameraOn,
+      microphone: isMicOn,
+      userId: socket.id,
+      screenSharing: camera,
+    });
+  }
+}
+
+function toggleAudio() {
+  const audioTrack = localStream.getAudioTracks()[0];
+  const videoTrack = localStream.getVideoTracks()[0];
+
+  if (audioTrack) {
+    audioTrack.enabled = !audioTrack.enabled;
+    const isMicOn = audioTrack.enabled;
+    const isCameraOn = videoTrack ? videoTrack.enabled : false;
+
+    const iconoAudio = document.getElementById("iconoAudio");
+    iconoAudio.src = isMicOn ? "/img/audio.png" : "/img/mute.png";
+
+    socket.emit("update-media-status", {
+      camera: isCameraOn,
+      microphone: isMicOn,
+      userId: socket.id,
+      screenSharing: camera,
+    });
+  }
+}
+
+async function exitButton() {
+  if (isAdmin) {
+    await stopRecordingAndUpload();
+  }
+
+  Object.values(peerConnections).forEach((pc) => pc.close());
+  peerConnections = {};
+
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+    localStream = null;
+  }
+
+  document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  window.location.href = "/";
+}
+
+function createPeerConnection(userId, userName) {
+  if (peerConnections[userId]) return;
+
+  const peerConnection = new RTCPeerConnection(configuration);
+  peerConnections[userId] = peerConnection;
+
+  localStream
+    .getTracks()
+    .forEach((track) => peerConnection.addTrack(track, localStream));
+
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit("candidate", { target: userId, candidate: event.candidate });
+    }
+  };
+
+  peerConnection.ontrack = (event) => {
+    const remoteVideo =
+      document.getElementById(userId) ||
+      createRemoteVideoElement(userId, userName, socket, isAdmin);
+    remoteVideo.srcObject = event.streams[0];
+  };
+
+  peerConnection
+    .createOffer()
+    .then((offer) => peerConnection.setLocalDescription(offer))
+    .then(() => {
+      socket.emit("offer", {
+        target: userId,
+        offer: peerConnection.localDescription,
+      });
+    })
+    .catch((error) => console.error("❌ Error creando oferta:", error));
+}
+
+async function handleOffer(data) {
+  const peerConnection = new RTCPeerConnection(configuration);
+  peerConnections[data.sender] = peerConnection;
+
+  localStream
+    .getTracks()
+    .forEach((track) => peerConnection.addTrack(track, localStream));
+
+  peerConnection.onicecandidate = (event) => {
+    if (event.candidate) {
+      socket.emit("candidate", {
+        target: data.sender,
+        candidate: event.candidate,
+      });
+    }
+  };
+
+  peerConnection.ontrack = (event) => {
+    const remoteVideo =
+      document.getElementById(data.sender) ||
+      createRemoteVideoElement(
+        data.sender,
+        users[data.sender],
+        socket,
+        isAdmin
+      );
+    remoteVideo.srcObject = event.streams[0];
+  };
+
+  await peerConnection.setRemoteDescription(
+    new RTCSessionDescription(data.offer)
+  );
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  socket.emit("answer", { target: data.sender, answer: answer });
+
+  addIceCandidates(data.sender, peerConnection);
+}
 
 async function addIceCandidates(userId, peerConnection) {
   if (iceCandidateQueue[userId]?.length > 0) {
@@ -28,319 +296,91 @@ async function addIceCandidates(userId, peerConnection) {
   }
 }
 
-// Evento para el usuario nuevo (solo crea conexiones y envía offer)
-socket.on("users-in-room", (usersArray) => {
-  usersArray.forEach(({ userId, userName }) => {
-    users[userId] = userName;
-    createPeerConnection(userId, users[userId]); // El nuevo crea la conexión y envía offer
-  });
-});
-
-// Evento para los usuarios viejos (NO crean conexión aquí, solo esperan offer)
-socket.on("new-user", ({ userId, roomId: remoteRoomId, userName}) => {
-  users[userId] = userName;
-});
-
-socket.on("user-disconnected", (userId) => {
-  if (peerConnections[userId]) {
-    peerConnections[userId].close();
-    delete peerConnections[userId];
-    document.getElementById(userId)?.remove();
-    document.getElementById(`user-container-${userId}`)?.remove()
-  }
-});
-
-// Función para actualizar el stream local
-function updateLocalStream(newStream) {
-  if (localStream) {
-    localStream.getTracks().forEach((track) => track.stop()); // Detener las pistas actuales
-  }
-  localStream = newStream;
-  localVideo.srcObject = localStream;
-  localVideo.muted = true;
-
-  // Actualizar las pistas en las conexiones existentes
-  Object.values(peerConnections).forEach((pc) => {
-    const senders = pc.getSenders();
-    senders.forEach((sender) => {
-      const newTrack = localStream
-        .getTracks()
-        .find((track) => track.kind === sender.track.kind);
-      if (newTrack) {
-        sender.replaceTrack(newTrack);
-      }
-    });
-  });
-}
-
-async function changeMedia() {
-  const buttonMedia = document.getElementById("buttonScreen")
-  try {
-    let stream;
-
-
-    if (camera) {
-      // Obtener stream de la cámara con audio y video
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
-        audio: true,
-      });
-      //cambiar la imagen del boton de la camara
-      buttonMedia.src = "./img/compartir-pantalla.png"
-    } else {
-      // Obtener stream de la pantalla compartida (video y audio del sistema, si está disponible)
+async function start() {
+  if (isAdmin) {
+    try {
+      // 1. Capturar pantalla (con o sin audio)
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true,
-      });
-      buttonMedia.src = "./img/no-pantalla.png"
-
-      // Obtener stream del micrófono (solo audio)
-      const audioStream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: true // Pedir audio pero puede ser rechazado
       });
 
-      // Combinar el audio del micrófono y el audio de la pantalla compartida
-      const mixedAudioStream = await mixAudioStreams(screenStream, audioStream);
+      // 2. Intentar capturar micrófono
+      let micStream;
+      try {
+        micStream = await navigator.mediaDevices.getUserMedia({
+          audio: true
+        });
+      } catch (micError) {
+        console.warn("No se pudo acceder al micrófono:", micError);
+      }
 
-      // Combinar el video de la pantalla compartida con el audio mezclado
-      const videoTrack = screenStream.getVideoTracks()[0];
-      const mixedStream = new MediaStream([
-        videoTrack,
-        ...mixedAudioStream.getAudioTracks(),
-      ]);
+      // 3. Determinar qué streams usar para la grabación
+      let recordingStream;
+      if (screenStream.getAudioTracks().length > 0 && micStream) {
+        // Mezclar ambos audios si ambos existen
+        const mixedAudio = await mixAudioStreams(screenStream, micStream);
+        const videoTrack = screenStream.getVideoTracks()[0];
+        recordingStream = new MediaStream([videoTrack, ...mixedAudio.getAudioTracks()]);
+      } else if (screenStream.getAudioTracks().length > 0) {
+        // Usar solo audio de pantalla si existe
+        recordingStream = screenStream;
+      } else if (micStream) {
+        // Usar solo micrófono si existe (con video de pantalla)
+        const videoTrack = screenStream.getVideoTracks()[0];
+        recordingStream = new MediaStream([videoTrack, ...micStream.getAudioTracks()]);
+      } else {
+        // Solo video si no hay audio
+        recordingStream = new MediaStream([screenStream.getVideoTracks()[0]]);
+      }
 
-      stream = mixedStream;
+      // Configurar el MediaRecorder
+      recordedChunks = [];
+      mediaRecorder = new MediaRecorder(recordingStream, {
+        mimeType: "video/webm; codecs=vp9",
+      });
+
+      mediaRecorder.ondataavailable = function(event) {
+        if (event.data.size > 0) {
+          recordedChunks.push(event.data);
+        }
+      };
+
+      // Manejar cuando el usuario deja de compartir pantalla
+      screenStream.getVideoTracks()[0].onended = () => {
+        if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+          mediaRecorder.stop();
+        }
+      };
+
+      mediaRecorder.start();
+      console.log("Grabación iniciada por admin");
+    } catch (err) {
+      console.error("Error al iniciar grabación:", err);
+      if (err.name !== 'NotAllowedError') {
+        alert("Error al configurar la grabación: " + err.message);
+      }
     }
-
-    console.log(`🎥 Cambiando a ${camera ? "cámara" : "pantalla compartida"}`);
-    updateLocalStream(stream);
-    camera = !camera;
-
-    // Actualizar estado de cámara y micrófono después de cambiar el stream
-    const videoTrack = localStream.getVideoTracks()[0];
-    const audioTrack = localStream.getAudioTracks()[0];
-    const isCameraOn = videoTrack ? videoTrack.enabled : false;
-    const isMicOn = audioTrack ? audioTrack.enabled : false;
-
-    socket.emit("update-media-status", {
-      camera: isCameraOn,
-      microphone: isMicOn,
-      userId: socket.id,
-      screenSharing: camera,
-    });
-
-    // Procesar ofertas pendientes
-    pendingOffers.forEach(handleOffer);
-    pendingOffers.length = 0; // Limpiar la cola de ofertas pendientes
-
-  } catch (error) {
-    console.error("❌ Error accediendo a dispositivos multimedia:", error);
-    alert(
-      `No se pudo acceder a ${
-        camera ? "la cámara" : "la pantalla compartida"
-      }. Asegúrate de permitir el acceso. Error: ${error.message}`
-    );
-  }
-}
-
-// Función para mezclar dos streams de audio
-async function mixAudioStreams(stream1, stream2) {
-  const audioContext = new AudioContext();
-
-  // Crear nodos de origen para cada stream de audio
-  const source1 = audioContext.createMediaStreamSource(stream1);
-  const source2 = audioContext.createMediaStreamSource(stream2);
-
-  // Crear un nodo de destino para el stream mezclado
-  const destination = audioContext.createMediaStreamDestination();
-
-  // Conectar los nodos de origen al nodo de destino
-  source1.connect(destination);
-  source2.connect(destination);
-
-  // Devolver el stream mezclado
-  return destination.stream;
-}
-
-function toggleCamera() {
-  const videoTrack = localStream.getVideoTracks()[0];
-  const audioTrack = localStream.getAudioTracks()[0];
-
-  if (videoTrack) {
-    videoTrack.enabled = !videoTrack.enabled;
-    const isCameraOn = videoTrack.enabled;
-    const isMicOn = audioTrack ? audioTrack.enabled : false;
-
-    // Cambiar el ícono del botón
-    const iconoCamara = document.getElementById("iconoCamara");
-    iconoCamara.src = isCameraOn
-      ? "./img/camara.png"
-      : "./img/no-camara.png";
-
-    // Log correcto
-    console.log(`🎥 Cámara ${isCameraOn ? "encendida" : "apagada"}`, {
-      isCameraOn,
-      isMicOn,
-      screenSharing: !camera,
-      userId: socket.id,
-    });
-
-    socket.emit("update-media-status", {
-      camera: isCameraOn,
-      microphone: isMicOn,
-      userId: socket.id,
-      screenSharing: camera, // true si está compartiendo pantalla
-    });
-  }
-}
-
-function toggleAudio() {
-  const audioTrack = localStream.getAudioTracks()[0];
-  const videoTrack = localStream.getVideoTracks()[0];
-
-  if (audioTrack) {
-    audioTrack.enabled = !audioTrack.enabled;
-    const isMicOn = audioTrack.enabled;
-    const isCameraOn = videoTrack ? videoTrack.enabled : false;
-
-    // Cambiar el ícono del botón
-    const iconoAudio = document.getElementById("iconoAudio");
-    iconoAudio.src = isMicOn ? "./img/audio.png" : "./img/mute.png";
-
-    // Log correcto
-    console.log(`🎙️ Micrófono ${isMicOn ? "encendido" : "apagado"}`, {
-      isCameraOn,
-      isMicOn,
-      screenSharing: !camera,
-      userId: socket.id,
-    });
-
-    socket.emit("update-media-status", {
-      camera: isCameraOn,
-      microphone: isMicOn,
-      userId: socket.id,
-      screenSharing: camera,
-    });
-  }
-}
-
-function exitButton() {
-  // Cerrar todas las conexiones y detener el stream local
-  Object.values(peerConnections).forEach((pc) => {
-    pc.close();
-  });
-  peerConnections = {};
-  if (localStream) {
-    localStream.getTracks().forEach((track) => track.stop());
-    localStream = null;
-  }
-  document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-  window.location.href = "/";
-  console.log('cerrando')
-}
-
-
-// Función para crear una conexión peer-to-peer
-function createPeerConnection(userId, userName) {
-  if (peerConnections[userId]) {
-    console.log(`🔗 Conexión ya existente con ${userId}`);
-    return;
   }
 
-  console.log(`🔗 Creando conexión con ${userId}`);
-  const peerConnection = new RTCPeerConnection(configuration);
-  peerConnections[userId] = peerConnection;
-
-  // Agregar pistas locales
-  localStream
-    .getTracks()
-    .forEach((track) => peerConnection.addTrack(track, localStream));
-
-  // Manejar candidatos ICE
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit("candidate", { target: userId, candidate: event.candidate });
-    }
-  };
-
-  // Manejar transmisión remota
-  peerConnection.ontrack = (event) => {
-    //si no puede obtener el elemento, lo crea
-    const remoteVideo =
-      document.getElementById(userId) || createRemoteVideoElement(userId, userName, socket, userNameLocal);
-    remoteVideo.srcObject = event.streams[0];
-    console.log(users)
-  };
-
-  // Crear oferta y enviarla al otro usuario
-  peerConnection
-    .createOffer()
-    .then((offer) => peerConnection.setLocalDescription(offer))
-    .then(() => {
-      console.log(`📨 Enviando oferta a ${userId}`);
-      socket.emit("offer", {
-        target: userId,
-        offer: peerConnection.localDescription,
-      });
-    })
-    .catch((error) => console.error("❌ Error creando oferta:", error));
-}
-
-// Función para manejar ofertas recibidas
-async function handleOffer(data) {
-  const peerConnection = new RTCPeerConnection(configuration);
-  peerConnections[data.sender] = peerConnection;
-
-  // Agregar pistas locales
-  localStream
-    .getTracks()
-    .forEach((track) => peerConnection.addTrack(track, localStream));
-
-  // Manejar candidatos ICE del otro usuario
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit("candidate", {
-        target: data.sender,
-        candidate: event.candidate,
-      });
-    }
-  };
-
-  // Manejar transmisión remota
-  peerConnection.ontrack = (event) => {
-    const remoteVideo =
-      document.getElementById(data.sender) ||
-      createRemoteVideoElement(data.sender, users[data.sender], socket, userNameLocal);
-    remoteVideo.srcObject = event.streams[0];
-  };
-
-  await peerConnection.setRemoteDescription(
-    new RTCSessionDescription(data.offer)
-  );
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
-  socket.emit("answer", { target: data.sender, answer: answer });
-
-  addIceCandidates(data.sender, peerConnection);
-}
-
-async function start() {
-  await changeMedia(); // Esto inicializa localStream
+  await changeMedia();
   socket.emit("join-room", { roomId, userName: userNameLocal });
 }
+
+
 start();
 
 socket.on("update-media-status", (data) => {
   const { userId, camera, microphone, screenSharing } = data;
-  document.getElementById(userId) || createRemoteVideoElement(userId, users[userId], socket, userNameLocal);
+  document.getElementById(userId) ||
+    createRemoteVideoElement(userId, users[userId], socket, isAdmin);
 
   updateMediaStatus(userId, camera, microphone, screenSharing);
 });
 
 socket.on("offer", (data) => {
   if (localStream) {
-    handleOffer(data); // Aquí sí creas la conexión si no existe
+    handleOffer(data);
   } else {
     pendingOffers.push(data);
   }
@@ -352,8 +392,6 @@ socket.on("answer", async (data) => {
   if (pc.signalingState !== "stable") {
     await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
     addIceCandidates(data.sender, pc);
-  } else {
-    return;
   }
 });
 
@@ -364,7 +402,6 @@ socket.on("candidate", async (data) => {
         new RTCIceCandidate(data.candidate)
       );
     } else {
-      // Almacenar candidatos ICE en la cola
       if (!iceCandidateQueue[data.sender]) {
         iceCandidateQueue[data.sender] = [];
       }
@@ -374,9 +411,23 @@ socket.on("candidate", async (data) => {
 });
 
 socket.on("kicked", () => {
-    alert("Has sido expulsado de la sala por el administrador.");
-    document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    window.location.href = "/";
+  alert("Has sido expulsado de la sala por el administrador.");
+  document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  window.location.href = "/";
+});
+
+socket.on("force-close-room", async () => {
+    if (isAdmin && mediaRecorder && mediaRecorder.state !== "inactive") {
+    await stopRecordingAndUpload();
+  }
+  alert("La videollamada ha finalizado.");
+  window.location.href = "/rooms-form";
+});
+
+window.addEventListener("beforeunload", (e) => {
+  if (isAdmin && mediaRecorder && mediaRecorder.state !== "inactive") {
+    stopRecordingAndUpload();
+  }
 });
 
 window.toggleAudio = toggleAudio;

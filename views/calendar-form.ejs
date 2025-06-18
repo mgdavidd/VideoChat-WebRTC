@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Calendario de Salas</title>
+    <link rel="stylesheet" href="/css/calendar-form.css">
+</head>
+<body>
+    <div class="calendar-container">
+        <h1>Unirse a una sala</h1>
+        <form action="/calendar-form" method="post">
+            <label for="roomId">ID de Sala</label>
+            <input type="text" id="roomId" name="roomId" required autocomplete="off">
+            <button type="submit">Ir a la sala</button>
+        </form>
+        <div class="extra-link">
+            <a href="/rooms-form">Volver</a>
+        </div>
+    </div>
+</body>
+</html>

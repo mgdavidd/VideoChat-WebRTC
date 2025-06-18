@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calendar-Multi con Fechas y Horas</title>
+  <script type="module" src="https://unpkg.com/cally"></script>
+  <link rel="stylesheet" href="/css/calendar.css" />
+  <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.4/build/global/luxon.min.js"></script>
+</head>
+<body>
+  <h1>
+    Proponer Horario de Clase <br />
+    Room: <%= roomId %>
+  </h1>
+
+  <div class="extra-link">
+    <a href="/calendar-form">Volver</a>
+  </div>
+
+  <calendar-multi id="myCalendar" months="2" value="">
+    <div class="grid">
+      <calendar-month></calendar-month>
+      <calendar-month offset="1"></calendar-month>
+    </div>
+  </calendar-multi>
+
+  <div class="button-container">
+    <button id="virtualClassButton" class="btn btn-virtual selected">
+      Clase Virtual
+    </button>
+    <button id="aaaMeetingButton" class="btn btn-aaa">Encuentros AAA</button>
+  </div>
+
+  <div id="timeSelectors"></div>
+  <button id="saveButton">Guardar</button>
+
+  <script>
+    const roomId = "<%= roomId %>";
+    const DateTime = luxon.DateTime;
+    
+    document.addEventListener("DOMContentLoaded", () => {
+      const calendar = document.getElementById("myCalendar");
+      const saveButton = document.getElementById("saveButton");
+      const timeSelectorsDiv = document.getElementById("timeSelectors");
+      const virtualClassBtn = document.getElementById("virtualClassButton");
+      const aaaMeetingBtn = document.getElementById("aaaMeetingButton");
+
+      function getTodayLocalDate() {
+        return DateTime.local().toISODate();
+      }
+
+      const today = getTodayLocalDate();
+      calendar.setAttribute("min", today);
+
+      let currentEventType = "encuentro virtual";
+      const dateEvents = {};
+      const hoursByDate = {};
+
+      fetch(`/fechas/${roomId}`)
+        .then((res) => res.json())
+        .then((fechas) => {
+          if (!Array.isArray(fechas)) {
+            alert("Error al cargar las fechas del servidor.");
+            return;
+          }
+
+          fechas.forEach((f) => {
+            // Convertir UTC a hora local
+            const startDate = DateTime.fromISO(f.fecha_inicial_utc).toLocal();
+            const endDate = DateTime.fromISO(f.fecha_final_utc).toLocal();
+            
+            const date = startDate.toISODate();
+            const start = startDate.toFormat("HH:mm");
+            const end = endDate.toFormat("HH:mm");
+
+            dateEvents[date] = f.tipo;
+            hoursByDate[date] = { start, end };
+          });
+
+          calendar.value = Object.keys(dateEvents).join(" ");
+          updateDisplay();
+        });
+
+      virtualClassBtn.addEventListener("click", () => {
+        currentEventType = "encuentro virtual";
+        virtualClassBtn.classList.add("selected");
+        aaaMeetingBtn.classList.remove("selected");
+      });
+
+      aaaMeetingBtn.addEventListener("click", () => {
+        currentEventType = "aaa";
+        aaaMeetingBtn.classList.add("selected");
+        virtualClassBtn.classList.remove("selected");
+      });
+
+      calendar.addEventListener("change", () => {
+        const selectedDates = calendar.value.split(" ").filter(Boolean);
+
+        selectedDates.forEach((date) => {
+          if (!dateEvents[date]) dateEvents[date] = currentEventType;
+        });
+
+        Object.keys(dateEvents).forEach((date) => {
+          if (!selectedDates.includes(date)) delete dateEvents[date];
+        });
+
+        updateDisplay();
+      });
+
+      calendar.dispatchEvent(new Event("change"));
+
+      function updateDisplay() {
+        timeSelectorsDiv.innerHTML = "";
+        const sortedDates = Object.keys(dateEvents).sort(
+          (a, b) => new Date(a) - new Date(b)
+        );
+
+        sortedDates.forEach((date) => {
+          const eventType = dateEvents[date];
+          const { start = "", end = "" } = hoursByDate[date] || {};
+          const div = document.createElement("div");
+          div.className = `date-time-selector ${eventType}-class`;
+          div.innerHTML = `
+            <span class="event-type ${eventType}">${eventType.toUpperCase()}</span>
+            <label>${formatDate(date)}</label>
+            <input type="time" name="start-${date}" value="${start}" required>
+            <input type="time" name="end-${date}" value="${end}" required>
+          `;
+          timeSelectorsDiv.appendChild(div);
+        });
+      }
+
+      function formatDate(dateString) {
+        const date = DateTime.fromISO(dateString);
+        return date.setLocale("es").toLocaleString({
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric"
+        });
+      }
+
+      saveButton.addEventListener("click", () => {
+        const data = [];
+        const userTimeZone = DateTime.local().zoneName;
+
+        for (const date of Object.keys(dateEvents)) {
+          const startInput = document.querySelector(
+            `input[name="start-${date}"]`
+          );
+          const endInput = document.querySelector(
+            `input[name="end-${date}"]`
+          );
+          const startLocal = startInput?.value || "";
+          const endLocal = endInput?.value || "";
+
+          if (!startLocal || !endLocal) {
+            alert(
+              "Por favor, selecciona la hora de inicio y fin para todas las fechas."
+            );
+            return;
+          }
+
+          // Validar formato de hora
+          if (!/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(startLocal) || 
+              !/^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(endLocal)) {
+            alert("Formato de hora inválido. Use HH:mm (24 horas)");
+            return;
+          }
+
+          // Validar inicio < fin
+          if (startLocal >= endLocal) {
+            alert(
+              `La hora de inicio debe ser menor que la hora de fin para ${formatDate(date)}.`
+            );
+            return;
+          }
+
+          data.push({
+            date,
+            type: dateEvents[date],
+            start: startLocal,
+            end: endLocal,
+            timeZone: userTimeZone
+          });
+        }
+
+        fetch("/fechas", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            fechas: data,
+            selectedDates: data.map((d) => d.date),
+            roomId: roomId,
+          }),
+        })
+          .then((res) => res.json())
+          .then((resp) => {
+            if (resp.success) {
+              alert("Fechas guardadas correctamente");
+            } else {
+              alert("Error al guardar: " + (resp.error || ""));
+            }
+          })
+          .catch(err => {
+            console.error("Error al guardar:", err);
+            alert("Error en la comunicación con el servidor");
+          });
+      });
+    });
+  </script>
+</body>
+</html>

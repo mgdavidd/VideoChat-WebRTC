@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sala <%= roomId %></title>
-    <link rel="stylesheet" href="./css/room.css">
+    <link rel="stylesheet" href="/css/room.css">
   </head>
   <body>
     <h1>Bienvenido a la sala: <%= roomId %></h1>
@@ -13,19 +13,19 @@
       <div id="localControls">
         <!-- Botones de control -->
         <button onclick="toggleCamera()" id="btnCamara" class="btnCamara">
-          <img src="./img/camara.png" alt="icono camara" id="iconoCamara" />
+          <img src="/img/camara.png" alt="icono camara" id="iconoCamara" />
         </button>
         <button onclick="toggleAudio()" id="btnAudio" class="btnAudio">
-          <img src="./img/audio.png" alt="icono audio" id="iconoAudio" />
+          <img src="/img/audio.png" alt="icono audio" id="iconoAudio" />
         </button>
         <button onclick="changeMedia()" class="btnScreen">
-          <img src="./img/compartir-pantalla.png" alt="" id="buttonScreen" />
+          <img src="/img/compartir-pantalla.png" alt="" id="buttonScreen" />
         </button>
         <button class="btnFullScreen" id="btnFullScreen">
-          <img src="./img/pantalla-completa.png" alt="Pantalla completa" />
+          <img src="/img/pantalla-completa.png" alt="Pantalla completa" />
         </button>
         <button onclick="exitButton()">
-          <img src="./img/salida.png" alt="">
+          <img src="/img/salida.png" alt="">
         </button>
       </div>
     </div>
@@ -37,6 +37,7 @@
       // Pasar el roomId al cliente
       const roomId = "<%= roomId %>";
       const userNameLocal = "<%= userName %>";
+      const isAdmin = "<%= isAdmin %>" === "true" ? true : false
     </script>
     <script src="/js/client.js" type="module"></script>
   </body>

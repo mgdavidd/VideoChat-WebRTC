@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ingreso a sala</title>
+    <link rel="stylesheet" href="./css/room-form.css">
+</head>
+<body>
+    <div class="room-form-container">
+        <h1>Bienvenido <%= userName %></h1>
+        <h2>Ingreso</h2>
+        <form action="/join" method="post">
+            <label for="roomId">Room Id:</label>
+            <input type="text" id="roomId" name="roomId" required>
+            <button type="submit">Join</button>
+        </form>
+        <form action="/calendar-form">
+            <button type="submit">Calendario</button>
+        </form>
+    </div>
+</body>
+</html>

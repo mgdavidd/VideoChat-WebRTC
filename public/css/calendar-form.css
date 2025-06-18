@@ -1,25 +1,6 @@
-:root {
-  --primary: #1b4c85;
-  --secondary: #2361a9;
-  --accent: #00c6fb;
-  --dark: #181c24;
-  --light: #f5f6fa;
-  --border-radius: 18px;
-  --box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
-  --glass-bg: rgba(24, 28, 36, 0.85);
-}
+@import url('login.css');
 
-body {
-  min-height: 100vh;
-  margin: 0;
-  font-family: 'Segoe UI', system-ui, sans-serif;
-  background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.login-container {
+.calendar-container {
   background: var(--glass-bg);
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
@@ -32,11 +13,6 @@ body {
   backdrop-filter: blur(8px);
   border: 1.5px solid rgba(255,255,255,0.08);
   animation: fadeIn 0.8s;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(30px);}
-  to { opacity: 1; transform: translateY(0);}
 }
 
 h1 {
@@ -63,7 +39,7 @@ label {
   font-weight: 500;
 }
 
-input[type="text"], input[type="password"] {
+input[type="text"] {
   padding: 0.7rem 1rem;
   border-radius: var(--border-radius);
   border: 1.5px solid #232323;
@@ -75,7 +51,7 @@ input[type="text"], input[type="password"] {
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
-input[type="text"]:focus, input[type="password"]:focus {
+input[type="text"]:focus {
   border: 1.5px solid var(--accent);
   background: rgba(255,255,255,0.13);
 }
@@ -119,7 +95,7 @@ button[type="submit"]:hover {
 }
 
 @media (max-width: 500px) {
-  .login-container {
+  .calendar-container {
     padding: 1.5rem 0.7rem;
     max-width: 98vw;
   }
@@ -129,25 +105,4 @@ button[type="submit"]:hover {
   input[type="text"], button[type="submit"] {
     font-size: 0.98rem;
   }
-}
-
-button.google-log {
-  margin-top: 1rem;
-  padding: 0.75rem 1.2rem;
-  border-radius: var(--border-radius);
-  border: none;
-  background: linear-gradient(90deg, #db4437, #c23321); /* Colores de Google rojo */
-  color: var(--light);
-  font-size: 1.1rem;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(219, 68, 55, 0.25);
-  transition: background 0.2s, transform 0.2s, box-shadow 0.2s;
-  letter-spacing: 0.5px;
-}
-
-button.google-log:hover {
-  background: linear-gradient(90deg, #e57368, #d94f3a);
-  transform: translateY(-2px) scale(1.03);
-  box-shadow: 0 4px 16px rgba(219, 68, 55, 0.25);
 }

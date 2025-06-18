@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Instrucciones para el Docente</title>
+  <link rel="stylesheet" href="/css/instructions.css">
+  <script>
+    document.addEventListener("DOMContentLoaded", function() {
+      const btn = document.getElementById("continuar-btn");
+      btn.disabled = true;
+      let seconds = 10;
+      const countdown = document.getElementById("countdown");
+      countdown.textContent = seconds;
+
+      const interval = setInterval(() => {
+        seconds--;
+        countdown.textContent = seconds;
+        if (seconds <= 0) {
+          clearInterval(interval);
+          btn.disabled = false;
+          btn.textContent = "Continuar";
+          countdown.style.display = "none";
+        }
+      }, 1000);
+    });
+  </script>
+</head>
+<body>
+  <div class="instrucciones-admin-container">
+    <h1>¡Bienvenido, Docente!</h1>
+    <p>
+      Antes de comenzar, por favor lee atentamente estas indicaciones:
+    </p>
+<ul>
+  <li>Solo usted puede grabar y gestionar las sesiones.</li>
+  <li>A la hora de hacer las sesiones, asegúrese de tener una buena conexión a Internet y sin Firewalls que puedan interferir.</li>
+  <li>Al iniciar una sesión, seleccione la vista a grabar; esta no podrá cambiarse hasta finalizar la grabación.</li>
+  <li>Recuerde habilitar el audio antes de iniciar cada grabación.</li>
+  <li>Verifique que su cuenta de Google Drive esté correctamente conectada y cuente con espacio suficiente.</li>
+  <li>No comparta su cuenta de administrador con terceros.</li>
+</ul>
+<button id="continuar-btn" disabled onclick="window.location.href='/auth/google'">
+  Espera <span id="countdown">10</span> segundos...
+</button>
+</div>
+</body>
+</html>

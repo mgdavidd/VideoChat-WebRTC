@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>Registro</title>
+  <link rel="stylesheet" href="/css/signup.css">
+</head>
+<body>
+  <div class="signup-container">
+    <h1>Registro</h1>
+    <form method="POST" action="/signup">
+      <input type="text" name="userName" placeholder="Nombre de usuario" required />
+      <input type="email" name="email" placeholder="Correo electrónico" required />
+      <input type="password" name="password" placeholder="Contraseña" required />
+      <label for="isAdmin">
+        <input type="checkbox" name="isAdmin" id="isAdmin" />
+        Eres Administrador (necesitarás conectar Google Drive)
+      </label>
+      <button type="submit">Registrarse</button>
+    </form>
+    <div class="extra-link">
+      ¿Ya tienes cuenta? <a href="/">Inicia sesión</a>
+    </div>
+  </div>
+</body>
+</html>
