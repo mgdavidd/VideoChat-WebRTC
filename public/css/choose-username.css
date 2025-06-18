@@ -73,3 +73,20 @@ body {
   color: #d32f2f;
   font-weight: 500;
 }
+
+@media (max-width: 500px) {
+  .choose-username-container {
+    padding: 1.5rem 1rem;
+    max-width: 95vw;
+  }
+
+  .choose-username-container h1 {
+    font-size: 1.3rem;
+  }
+
+  .choose-username-container input[type="text"],
+  .choose-username-container input[type="password"],
+  .choose-username-container button[type="submit"] {
+    font-size: 0.98rem;
+  }
+}

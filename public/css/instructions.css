@@ -49,3 +49,22 @@ body {
   color: #fff;
   cursor: not-allowed;
 }
+
+@media (max-width: 500px) {
+  .instrucciones-admin-container {
+    padding: 1.5rem 1rem;
+    max-width: 95vw;
+  }
+
+  .instrucciones-admin-container h1 {
+    font-size: 1.3rem;
+  }
+
+  .instrucciones-admin-container ul {
+    font-size: 0.98rem;
+  }
+
+  .instrucciones-admin-container button {
+    font-size: 0.98rem;
+  }
+}
