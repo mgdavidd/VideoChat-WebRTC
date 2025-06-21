@@ -31,14 +31,39 @@
     </div>
     <div id="remoteVideos"></div>
 
+    <div class="chat-container">
+      <div class="chat-header">
+        <span>Chat</span>
+        <button id="toggle-chat" title="Minimizar/Maximizar">&#x1F5D5;</button>
+      </div>
+      <section id="chat">
+        <ul id="messages"></ul>
+        <form id="form-chat">
+          <input type="text" name="message" id="input-chat" placeholder="Type a message" autocomplete="off" />
+          <button type="submit">Enviar</button>
+        </form>
+      </section>
+    </div>
+
     <!-- Incluir Socket.io y el script del cliente -->
     <script src="/socket.io/socket.io.js"></script>
+    <script>
+      window.socket = io();
+    </script>
     <script>
       // Pasar el roomId al cliente
       const roomId = "<%= roomId %>";
       const userNameLocal = "<%= userName %>";
       const isAdmin = "<%= isAdmin %>" === "true" ? true : false
+
+      const chatContainer = document.querySelector('.chat-container');
+      const toggleChatBtn = document.getElementById('toggle-chat');
+      toggleChatBtn.addEventListener('click', () => {
+        chatContainer.classList.toggle('minimized');
+        toggleChatBtn.title = chatContainer.classList.contains('minimized') ? "Maximizar" : "Minimizar";
+      });
     </script>
     <script src="/js/client.js" type="module"></script>
+    <script src="/js/messages.js"></script>
   </body>
 </html>

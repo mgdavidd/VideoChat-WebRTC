@@ -1,6 +1,6 @@
 import { createRemoteVideoElement, updateMediaStatus } from "./dom_elements.js";
 
-const socket = io();
+const socket = window.socket;
 let users = {};
 
 let mediaRecorder;

@@ -69,7 +69,8 @@ server.keepAliveTimeout = 600000;
 // Middleware de autenticación
 const allowedPaths = [
   "/", "/signup", "/login", "/join", "/fechas",
-  "/auth/google", "/auth/google/callback", "/choose-username"
+  "/auth/google", "/auth/google/callback", "/choose-username",
+  "/google0fa380567cbd463e.html", "/privacidad"
 ];
 
 app.use(async (req, res, next) => {
@@ -155,6 +156,14 @@ async function checkRoomAvailability(roomId) {
   );
   return result.rows.length > 0;
 }
+// terminos de privacidad para google
+app.get('/privacidad', (req, res) => {
+  res.sendFile(__dirname + '/public/privacidad.html');
+});
+
+app.get('/google0fa380567cbd463e.html', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'google0fa380567cbd463e.html'));
+});
 
 // Rutas
 app.get("/", (req, res) => res.render("login"));
@@ -481,6 +490,10 @@ io.on("connection", (socket) => {
       delete rooms[socket.roomId][targetId];
     }
   });
+
+  socket.on('chat message', (msg) => {
+    io.emit('chat message', msg)
+  })
 
   socket.on("disconnect", () => {
     if (!socket.roomId || !rooms[socket.roomId]) return;
