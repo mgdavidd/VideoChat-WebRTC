@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Mis Salas Administradas</title>
+  <link rel="stylesheet" href="/css/your-rooms.css">
+</head>
+<body>
+  <div class="rooms-container">
+    <h1>Salas administradas por <%= userName %></h1>
+    <% if (rooms && rooms.length > 0) { %>
+      <ul class="rooms-list">
+        <% rooms.forEach(roomId => { %>
+          <li>
+            <span class="room-id"><%= roomId %></span>
+            <a href="/room/<%= roomId %>" class="room-link">Entrar</a>
+            <a href="/calendar-form/<%= roomId %>" class="calendar-link">Calendario</a>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="no-rooms">No tienes salas administradas.</p>
+    <% } %>
+    <a href="/rooms-form" class="back-link">Volver</a>
+  </div>
+</body>
+</html>

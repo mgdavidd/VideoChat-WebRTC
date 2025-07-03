@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mis Grabaciones</title>
+    <link rel="stylesheet" href="/css/my-recordings.css">
+</head>
+<body>
+    <a href="/rooms-form" class="back-btn">Volver</a>
+
+    <h1>Mis Grabaciones</h1>
+    <div class="recordings-container">
+        <% 
+        // Agrupar grabaciones por roomId
+        let salas = {};
+        recordings.forEach(function(rec) {
+          if (!salas[rec.roomId]) salas[rec.roomId] = [];
+          salas[rec.roomId].push(rec);
+        });
+        %>
+
+        <% Object.keys(salas).forEach(function(roomId) { %>
+          <section class="room-section">
+            <h2 class="room-title">Sala: <%= roomId %></h2>
+            <ul class="recordings-list">
+              <% salas[roomId].forEach(function(recording) { %>
+                <li class="recording-item">
+                  <div class="recording-header">
+                    <span class="recording-title"><%= recording.titulo %></span>
+                    <a href="<%= recording.direccion %>" class="recording-link" target="_blank" title="Ver en Drive">Ver</a>
+                  </div>
+                  <div class="recording-meta">
+                    <span><b>Fecha:</b> <%= recording.fecha_local %></span> |
+                    <span><b>Tipo:</b> <%= recording.tipo.toUpperCase() %></span>
+                  </div>
+                  <form class="recording-actions" action="/update-recording/<%= recording.id %>" method="post">
+                    <label for="titulo-<%= recording.id %>">Título:</label>
+                    <input type="text" id="titulo-<%= recording.id %>" name="title" value="<%= recording.titulo %>">
+                    <label>
+                      <input type="checkbox" name="es_publico" value="1" <%= recording.es_publico ? "checked" : "" %> >
+                      Público
+                    </label>
+                    <button type="submit">Guardar</button>
+                  </form>
+                </li>
+              <% }) %>
+            </ul>
+          </section>
+        <% }) %>
+
+        <% if (!recordings || recordings.length === 0) { %>
+          <div class="no-recordings">No tienes grabaciones registradas.</div>
+        <% } %>
+    </div>
+
+</body>
+</html>

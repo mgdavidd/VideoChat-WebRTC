@@ -22,7 +22,7 @@ body {
   background: var(--light-bg);
   border-radius: var(--border-radius);
   box-shadow: var(--box-shadow);
-  padding: 2.5rem 2rem 2rem 2rem;
+  padding: 2.5rem 2rem 4rem 2rem; /* extra padding abajo */
   width: 100%;
   max-width: 370px;
   display: flex;
@@ -30,11 +30,6 @@ body {
   align-items: center;
   border: 1.5px solid rgba(27,76,133,0.08);
   animation: fadeIn 0.8s;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(30px);}
-  to { opacity: 1; transform: translateY(0);}
 }
 
 h1, h2 {
@@ -107,7 +102,7 @@ button[type="submit"]:hover {
 
 @media (max-width: 500px) {
   .room-form-container {
-    padding: 1.5rem 0.7rem;
+    padding: 1.5rem 0.7rem 6rem 0.7rem; /* extra bottom padding */
     max-width: 98vw;
   }
   h1, h2 {
@@ -117,3 +112,294 @@ button[type="submit"]:hover {
     font-size: 0.98rem;
   }
 }
+
+.form-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2200;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(27,76,133,0.22);
+  padding: 32px 24px 24px 24px;
+  min-width: 280px;
+  max-width: 90vw;
+  min-height: 120px;
+  display: none;
+  transition: opacity 0.3s;
+}
+
+.form-container[style*="display: block"] {
+  display: block;
+  opacity: 1;
+}
+
+.form-container input,
+.form-container button {
+  margin: 8px 0;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  font-size: 1rem;
+}
+
+.form-container button[type="submit"] {
+  background: #2196F3;
+  color: #fff;
+  border: none;
+  font-weight: bold;
+  transition: background 0.2s;
+}
+
+.form-container button[type="submit"]:hover {
+  background: #1769aa;
+}
+
+.form-container button[type="button"] {
+  background: #eee;
+  color: #333;
+  border: none;
+  font-weight: bold;
+  margin-top: 4px;
+  transition: background 0.2s;
+}
+
+.form-container button[type="button"]:hover {
+  background: #ccc;
+}
+
+.room-form-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  margin: 1.5rem 0 0 0;
+  flex-wrap: wrap;
+}
+
+/* Ya no son flotantes */
+#roomsButton,
+#myRecordingsButton {
+  background: #19a543;
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.8rem 1.6rem;
+  font-size: 1.08rem;
+  font-weight: bold;
+  box-shadow: 0 2px 8px #122547;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.2s;
+}
+
+#myRecordingsButton {
+  background: #03243f;
+}
+
+#myRecordingsButton:hover, #myRecordingsButton:focus {
+  background: #064980;
+  transform: scale(1.04);
+  outline: none;
+}
+
+#roomsButton:hover, #roomsButton:focus{
+  background: #19a543;
+  transform: scale(1.04);
+  outline: none;
+}
+
+.active-rooms-btn {
+  background: linear-gradient(90deg, #43e97b 0%, #38f9d7 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  padding: 0.8rem 1.6rem;
+  font-size: 1.08rem;
+  font-weight: bold;
+  box-shadow: 0 2px 8px rgba(67,233,123,0.10);
+  cursor: pointer;
+  margin: 1rem 0 0.5rem 0;
+  transition: background 0.2s, transform 0.2s;
+}
+.active-rooms-btn:hover {
+  background: linear-gradient(90deg, #38f9d7 0%, #43e97b 100%);
+  transform: scale(1.04);
+}
+
+.active-rooms-list {
+  background: #e3f2fd;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(33,150,243,0.08);
+  padding: 1.2rem 1.5rem;
+  margin: 0.5rem 0 1.5rem 0;
+  max-width: 350px;
+  margin-left: auto;
+  margin-right: auto;
+  display: none;
+  animation: fadeIn 0.3s;
+}
+.active-rooms-list h3 {
+  margin-top: 0;
+  color: #1769aa;
+  font-size: 1.1rem;
+  margin-bottom: 0.8rem;
+  text-align: center;
+}
+.active-rooms-list ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.active-rooms-list li {
+  margin-bottom: 0.7rem;
+  text-align: center;
+}
+.active-rooms-list a {
+  color: #2196F3;
+  font-weight: bold;
+  text-decoration: none;
+  background: #fff;
+  padding: 6px 18px;
+  border-radius: 8px;
+  transition: background 0.2s, color 0.2s;
+  box-shadow: 0 1px 4px rgba(33,150,243,0.07);
+}
+.active-rooms-list a:hover {
+  background: #2196F3;
+  color: #fff;
+}
+
+.active-rooms-list-float {
+  position: fixed;
+  top: 60px;
+  right: 40px;
+  width: 320px;
+  max-height: 60vh;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(33,150,243,0.18);
+  padding: 1.2rem 1.5rem;
+  z-index: 3000;
+  overflow-y: auto;
+  display: none;
+  animation: fadeIn 0.25s;
+}
+
+.active-rooms-list-float h3 {
+  margin-top: 0;
+  color: #1769aa;
+  font-size: 1.1rem;
+  margin-bottom: 0.8rem;
+  text-align: center;
+}
+
+.active-rooms-list-float ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.active-rooms-list-float li {
+  margin-bottom: 0.7rem;
+  text-align: center;
+}
+
+.active-rooms-list-float a {
+  color: #2196F3;
+  font-weight: bold;
+  text-decoration: none;
+  background: #e3f2fd;
+  padding: 6px 18px;
+  border-radius: 8px;
+  transition: background 0.2s, color 0.2s;
+  box-shadow: 0 1px 4px rgba(33,150,243,0.07);
+  display: inline-block;
+}
+
+.active-rooms-list-float a:hover {
+  background: #2196F3;
+  color: #fff;
+}
+
+.active-rooms-modal {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(33,150,243,0.10);
+  z-index: 3000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.active-rooms-content {
+  background: #fff;
+  border-radius: 18px;
+  box-shadow: 0 8px 32px rgba(33,150,243,0.18);
+  padding: 2rem 1.5rem 1.5rem 1.5rem;
+  max-width: 350px;
+  width: 90vw;
+  max-height: 70vh;
+  overflow-y: auto;
+  position: relative;
+  animation: fadeIn 0.25s;
+}
+
+.active-rooms-content h3 {
+  margin-top: 0;
+  color: #1769aa;
+  font-size: 1.2rem;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.active-rooms-content ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.active-rooms-content li {
+  margin-bottom: 0.7rem;
+  text-align: center;
+}
+
+.active-rooms-content a {
+  color: #2196F3;
+  font-weight: bold;
+  text-decoration: none;
+  background: #e3f2fd;
+  padding: 6px 18px;
+  border-radius: 8px;
+  transition: background 0.2s, color 0.2s;
+  box-shadow: 0 1px 4px rgba(33,150,243,0.07);
+  display: inline-block;
+}
+
+.active-rooms-content a:hover {
+  background: #2196F3;
+  color: #fff;
+}
+
+.close-active-rooms {
+  position: absolute;
+  top: 10px; right: 14px;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  color: #2196F3;
+  cursor: pointer;
+  font-weight: bold;
+  transition: color 0.2s;
+}
+.close-active-rooms:hover {
+  color: #1769aa;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-10px);}
+  to { opacity: 1; transform: translateY(0);}
+}
+
+

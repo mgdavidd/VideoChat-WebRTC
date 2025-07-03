@@ -7,8 +7,12 @@
 </head>
 <body>
     <div class="calendar-container">
+      <% if (typeof error !== "undefined" && error) { %>
+        <p class="error-message"><%= error %></p>
+      <% } %>
+
         <h1>Unirse a una sala</h1>
-        <form action="/calendar-form" method="post">
+        <form id="joinRoomForm" autocomplete="off">
             <label for="roomId">ID de Sala</label>
             <input type="text" id="roomId" name="roomId" required autocomplete="off">
             <button type="submit">Ir a la sala</button>
@@ -17,5 +21,14 @@
             <a href="/rooms-form">Volver</a>
         </div>
     </div>
+    <script>
+      document.getElementById('joinRoomForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const roomId = document.getElementById('roomId').value.trim();
+        if(roomId) {
+          window.location.href = '/calendar-form/' + encodeURIComponent(roomId);
+        }
+      });
+    </script>
 </body>
 </html>

@@ -37,6 +37,7 @@
 
   <script>
     const roomId = "<%= roomId %>";
+    const isOwner = "<%= isOwner %>"
     const DateTime = luxon.DateTime;
     
     document.addEventListener("DOMContentLoaded", () => {
@@ -45,6 +46,10 @@
       const timeSelectorsDiv = document.getElementById("timeSelectors");
       const virtualClassBtn = document.getElementById("virtualClassButton");
       const aaaMeetingBtn = document.getElementById("aaaMeetingButton");
+
+      if(isOwner === 'false'){
+        saveButton.style.display = "none"
+      }
 
       function getTodayLocalDate() {
         return DateTime.local().toISODate();
@@ -75,7 +80,8 @@
             const end = endDate.toFormat("HH:mm");
 
             dateEvents[date] = f.tipo;
-            hoursByDate[date] = { start, end };
+            // Guarda también grabacion_url
+            hoursByDate[date] = { start, end, grabacion_url: f.grabacion_url, titulo: f.grabacion_titulo, es_publico: f.es_publico };
           });
 
           calendar.value = Object.keys(dateEvents).join(" ");
@@ -118,16 +124,85 @@
 
         sortedDates.forEach((date) => {
           const eventType = dateEvents[date];
-          const { start = "", end = "" } = hoursByDate[date] || {};
+          const { start = "", end = "", grabacion_url, titulo, es_publico } = hoursByDate[date] || {};
+
+          // Calcula si la fecha ya pasó hace más de 24h
+          const fechaFin = DateTime.fromISO(date).plus({ days: 1 }); // fecha + 24h
+          const ahora = DateTime.local();
+          const esPasada = ahora > fechaFin;
+
           const div = document.createElement("div");
           div.className = `date-time-selector ${eventType}-class`;
+
           div.innerHTML = `
             <span class="event-type ${eventType}">${eventType.toUpperCase()}</span>
             <label>${formatDate(date)}</label>
-            <input type="time" name="start-${date}" value="${start}" required>
-            <input type="time" name="end-${date}" value="${end}" required>
+            <input type="time" name="start-${date}" value="${start}" required ${esPasada || isOwner === 'false' || grabacion_url ? "disabled" : ""}>
+            <input type="time" name="end-${date}" value="${end}" required ${esPasada || isOwner === 'false' || grabacion_url ? "disabled" : ""}>
+            ${
+              grabacion_url
+                ? (() => {
+                    if (!es_publico && isOwner === 'false') {
+                      return `<span style="color:#888;margin-left:10px;">(Grabación privada)</span>`;
+                    }
+                    const match = grabacion_url.match(/\/d\/([a-zA-Z0-9_-]+)\//);
+                    const fileId = match ? match[1] : null;
+                    const thumbnailUrl = fileId
+                      ? `https://drive.google.com/thumbnail?id=${fileId}`
+                      : "";
+                    return `
+  <span class="video-thumb-trigger" style="margin-left:10px;cursor:pointer;position:relative;" title="Ver grabación">
+    📹
+    ${
+      thumbnailUrl
+        ? `<div class="video-thumb-popup" style="display:none;">
+              <div class="video-title" style="font-weight:bold;font-size:14px;margin-bottom:6px;text-align:center;">
+                ${titulo ? titulo : 'Grabación'}
+              </div>
+              <img src="${thumbnailUrl}" alt="Miniatura de grabación">
+           </div>`
+        : ""
+    }
+  </span>
+  <a href="${grabacion_url}" target="_blank" style="margin-left:8px;" title="Abrir grabación en Drive">Ver en Drive</a>
+                    `;
+                  })()
+                : ""
+            }
           `;
+
           timeSelectorsDiv.appendChild(div);
+
+          // Si hay grabación, agrega eventos para mostrar la miniatura
+          if (grabacion_url && es_publico) {
+            const trigger = div.querySelector('.video-thumb-trigger');
+            const popup = div.querySelector('.video-thumb-popup');
+
+            // Para mouse (hover)
+            trigger.addEventListener('mouseenter', () => {
+              popup.style.display = 'block';
+            });
+            trigger.addEventListener('mouseleave', () => {
+              popup.style.display = 'none';
+            });
+
+            // Para dispositivos táctiles (click/tap)
+            trigger.addEventListener('click', function (e) {
+              // Evita que el enlace se active si hay miniatura
+              if (popup) {
+                e.preventDefault();
+                // Alterna la visibilidad
+                popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+                // Opcional: cerrar si se toca fuera
+                document.addEventListener('click', function handler(ev) {
+                  if (!trigger.contains(ev.target)) {
+                    popup.style.display = 'none';
+                    document.removeEventListener('click', handler);
+                  }
+                });
+              }
+            });
+          }
         });
       }
 
@@ -142,6 +217,9 @@
       }
 
       saveButton.addEventListener("click", () => {
+        if(isOwner === 'false'){
+          return alert("No eres dueño de la sala")
+        }
         const data = [];
         const userTimeZone = DateTime.local().zoneName;
 

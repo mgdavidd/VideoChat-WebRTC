@@ -45,8 +45,8 @@ const upload = multer({
   storage,
   limits: { fileSize: 1024 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
-    file.mimetype === "video/webm" 
-      ? cb(null, true) 
+    file.mimetype === "video/webm"
+      ? cb(null, true)
       : cb(new Error("Formato no soportado"), false);
   },
 });
@@ -57,20 +57,29 @@ app.use(cookieParser());
 app.use(express.json({ limit: "500mb" }));
 app.use(express.urlencoded({ extended: true, limit: "500mb" }));
 app.use(express.static(path.join(__dirname, "public")));
-app.use(session({
-  secret: process.env.SESSION_SECRET || "secretoseguro",
-  resave: false,
-  saveUninitialized: true,
-}));
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || "secretoseguro",
+    resave: false,
+    saveUninitialized: true,
+  })
+);
 
 server.headersTimeout = 600000;
 server.keepAliveTimeout = 600000;
 
 // Middleware de autenticación
 const allowedPaths = [
-  "/", "/signup", "/login", "/join", "/fechas",
-  "/auth/google", "/auth/google/callback", "/choose-username",
-  "/google0fa380567cbd463e.html", "/privacidad"
+  "/",
+  "/signup",
+  "/login",
+  "/join",
+  "/fechas",
+  "/auth/google",
+  "/auth/google/callback",
+  "/choose-username",
+  "/google0fa380567cbd463e.html",
+  "/privacidad",
 ];
 
 app.use(async (req, res, next) => {
@@ -81,7 +90,7 @@ app.use(async (req, res, next) => {
   if (req.cookies.userName) {
     try {
       const result = await db.execute(
-        "SELECT is_admin FROM users WHERE nombre = ?", 
+        "SELECT is_admin FROM users WHERE nombre = ?",
         [req.cookies.userName]
       );
       req.isAdmin = result.rows[0]?.is_admin === 1;
@@ -116,7 +125,7 @@ async function getAdminDriveClient(adminUserName) {
     }
 
     const admin = userResult.rows[0];
-    
+
     // intentar con OAuth del usuario
     if (admin.google_token) {
       try {
@@ -157,24 +166,42 @@ async function checkRoomAvailability(roomId) {
   return result.rows.length > 0;
 }
 // terminos de privacidad para google
-app.get('/privacidad', (req, res) => {
-  res.sendFile(__dirname + '/public/privacidad.html');
+app.get("/privacidad", (req, res) => {
+  res.sendFile(__dirname + "/public/privacidad.html");
 });
 
-app.get('/google0fa380567cbd463e.html', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'google0fa380567cbd463e.html'));
+app.get("/google0fa380567cbd463e.html", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "google0fa380567cbd463e.html"));
 });
 
 // Rutas
 app.get("/", (req, res) => res.render("login"));
 app.get("/signup", (req, res) => res.render("signup"));
-app.get("/rooms-form", (req, res) => res.render("room-form", { 
-  userName: req.cookies.userName 
-}));
+app.get("/rooms-form", async (req, res) => {
+  const rooms = await db.execute("SELECT id FROM rooms");
+  // checkRoomAvailability debe devolver el id si está activa, o null/false si no
+  const activesRooms = (
+    await Promise.all(
+      rooms.rows.map(async (room) => {
+        const isActive = await checkRoomAvailability(room.id);
+        return isActive ? { id: room.id } : null;
+      })
+    )
+  ).filter(Boolean);
+
+  res.render("room-form", {
+    userName: req.cookies.userName,
+    isAdmin: req.isAdmin || false,
+    activesRooms,
+  });
+});
+
 app.get("/calendar-form", (req, res) => res.render("calendar-form"));
-app.get("/choose-username", (req, res) => res.render("choose-username", {
-  error: req.query.error || null
-}));
+app.get("/choose-username", (req, res) =>
+  res.render("choose-username", {
+    error: req.query.error || null,
+  })
+);
 
 app.post("/login", async (req, res) => {
   const { userName, password } = req.body;
@@ -183,7 +210,7 @@ app.post("/login", async (req, res) => {
       "SELECT * FROM users WHERE nombre = ? AND contraseña = ?",
       [userName, password]
     );
-    
+
     if (result.rows.length > 0) {
       res.cookie("userName", userName, { maxAge: 900000 });
       return res.redirect("/rooms-form");
@@ -207,8 +234,8 @@ app.post("/signup", async (req, res) => {
     );
 
     res.cookie("userName", userName, { maxAge: 900000 });
-    return isAdmin === "on" 
-      ? res.redirect("/instrucciones-admin") 
+    return isAdmin === "on"
+      ? res.redirect("/instrucciones-admin")
       : res.redirect("/rooms-form");
   } catch (err) {
     console.error("Error en registro:", err);
@@ -229,32 +256,108 @@ app.get("/instrucciones-admin", async (req, res) => {
   res.render("instructions");
 });
 
-app.post("/join", async (req, res) => {
+app.post("/join", (req, res) => {
   const { roomId } = req.body;
+  if (roomId) {
+    return res.redirect(`/room/${roomId}`);
+  }
+  res.redirect("/");
+});
+
+app.post("/create-room", async (req, res) => {
+  const { newRoomId } = req.body;
+  const userName = req.cookies.userName;
+
+  if (!newRoomId || !userName) {
+    return res.redirect("/rooms-form?error=missing_data");
+  }
+
   try {
-    const isOpen = await checkRoomAvailability(roomId);
-    return isOpen 
-      ? res.redirect(`/room/${roomId}`)
-      : res.render("room-closed");
-  } catch (error) {
-    console.error("Error verificando sala:", error);
-    res.render("room-closed");
+    // Buscar el ID del usuario admin
+    const userResult = await db.execute(
+      "SELECT id FROM users WHERE nombre = ?",
+      [userName]
+    );
+    const adminId = userResult.rows[0]?.id;
+    if (!adminId) {
+      return res.redirect("/rooms-form?error=user_not_found");
+    }
+
+    // Insertar la nueva sala
+    await db.execute("INSERT INTO rooms (id, admin) VALUES (?, ?)", [
+      newRoomId,
+      adminId,
+    ]);
+
+    res.redirect("/rooms-form?success=room_created");
+  } catch (err) {
+    console.error("Error creando sala:", err);
+    res.redirect("/rooms-form?error=room_creation_failed");
   }
 });
 
-app.post("/calendar-form", (req, res) => {
-  const { roomId } = req.body;
-  roomId 
-    ? res.render("calendar", { roomId }) 
-    : res.redirect("/");
+app.get("/your-rooms", (req, res) => {
+  const userName = req.cookies.userName;
+  db.execute(
+    "SELECT r.id FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ?",
+    [userName]
+  ).then((result) => {
+    const roomIds = result.rows.map((row) => row.id);
+    res.render("your-rooms", { rooms: roomIds, userName });
+  });
 });
 
-// Rutas de fechas (optimizadas)
-app.get("/fechas/:roomId", async (req, res) => {
+app.get("/calendar-form/:roomId", async (req, res) => {
+  const { roomId } = req.params;
+  const { userName } = req.cookies;
+  const result = await db.execute("SELECT 1 FROM rooms WHERE id = ?", [roomId]);
+  const owner = await db.execute(
+    "SELECT 1 FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ? AND r.id = ?",
+    [userName, roomId]
+  );
+  const isOwner = owner.rows.length > 0;
+  if (result.rows.length > 0) {
+    return res.render("calendar", { roomId, isOwner });
+  }
+  res.status(404).render("calendar-form", { error: "Sala no encontrada" });
+});
+
+app.get("/my-recordings", async (req, res) => {
+  const { userName } = req.cookies;
   try {
     const result = await db.execute(
-      "SELECT fecha_inicial_utc, fecha_final_utc, tipo FROM fechas WHERE roomId = ?",
-      [req.params.roomId]
+      `SELECT g.id, g.fecha_id, g.titulo, g.direccion, g.es_publico, 
+              f.fecha_local, f.roomId, f.tipo
+       FROM grabaciones g
+       JOIN fechas f ON g.fecha_id = f.id 
+       JOIN rooms r ON f.roomId = r.id
+       JOIN users u ON r.admin = u.id
+       WHERE u.nombre = ?
+       ORDER BY f.fecha_inicial_utc DESC`,
+      [userName]
+    );
+    res.render("my-recordings", { recordings: result.rows, userName });
+  } catch (err) {
+    console.error("Error obteniendo grabaciones:", err);
+    res.render("my-recordings", {
+      recordings: [],
+      userName,
+      error: "No se pudieron obtener las grabaciones",
+    });
+  }
+});
+
+app.get("/fechas/:roomId", async (req, res) => {
+  try {
+    const limiteInferior = DateTime.utc().minus({ weeks: 2 }).toISO();
+    const result = await db.execute(
+      `SELECT f.fecha_inicial_utc, f.fecha_final_utc, f.tipo, f.fecha_local, g.direccion AS grabacion_url, g.titulo AS grabacion_titulo, g.es_publico
+       FROM fechas f
+       LEFT JOIN grabaciones g ON g.fecha_id = f.id
+       WHERE f.roomId = ?
+         AND f.fecha_final_utc >= ?
+       ORDER BY f.fecha_inicial_utc ASC`,
+      [req.params.roomId, limiteInferior]
     );
     res.json(result.rows);
   } catch (err) {
@@ -265,7 +368,7 @@ app.get("/fechas/:roomId", async (req, res) => {
 
 app.post("/fechas", async (req, res) => {
   const { fechas = [], selectedDates = [], roomId = "1" } = req.body;
-  
+
   if (!Array.isArray(fechas)) {
     return res.status(400).json({ error: "Formato inválido" });
   }
@@ -275,7 +378,9 @@ app.post("/fechas", async (req, res) => {
     if (selectedDates.length > 0) {
       await db.execute(
         `DELETE FROM fechas 
-         WHERE roomId = ? AND fecha_local NOT IN (${selectedDates.map(() => "?").join(",")})`,
+         WHERE roomId = ? AND fecha_local NOT IN (${selectedDates
+           .map(() => "?")
+           .join(",")})`,
         [roomId, ...selectedDates]
       );
     }
@@ -283,14 +388,18 @@ app.post("/fechas", async (req, res) => {
     // Procesar cada fecha
     for (const f of fechas) {
       const { date, start, end, type, timeZone } = f;
-      
+
       if (!date || !start || !end || !timeZone) {
         return res.status(400).json({ error: "Datos incompletos" });
       }
-      
+
       // Convertir a UTC
-      const startUTC = DateTime.fromISO(`${date}T${start}`, { zone: timeZone }).toUTC().toISO();
-      const endUTC = DateTime.fromISO(`${date}T${end}`, { zone: timeZone }).toUTC().toISO();
+      const startUTC = DateTime.fromISO(`${date}T${start}`, { zone: timeZone })
+        .toUTC()
+        .toISO();
+      const endUTC = DateTime.fromISO(`${date}T${end}`, { zone: timeZone })
+        .toUTC()
+        .toISO();
 
       // Insertar o actualizar
       await db.execute(
@@ -319,24 +428,24 @@ app.get("/auth/google", (req, res) => {
       "https://www.googleapis.com/auth/drive.file",
       "https://www.googleapis.com/auth/drive.metadata",
       "https://www.googleapis.com/auth/userinfo.email",
-      "https://www.googleapis.com/auth/userinfo.profile"
+      "https://www.googleapis.com/auth/userinfo.profile",
     ],
     prompt: "consent",
   });
   res.redirect(authUrl);
 });
 
-app.get("/auth/google/callback", async (req, res) => { 
+app.get("/auth/google/callback", async (req, res) => {
   try {
     const { tokens } = await oAuth2Client.getToken(req.query.code);
     oAuth2Client.setCredentials(tokens);
-    
+
     const people = google.people({ version: "v1", auth: oAuth2Client });
     const { data } = await people.people.get({
       resourceName: "people/me",
       personFields: "emailAddresses",
     });
-    
+
     const userEmail = data.emailAddresses?.[0]?.value?.toLowerCase();
     if (!userEmail) throw new Error("Email no disponible");
 
@@ -347,10 +456,10 @@ app.get("/auth/google/callback", async (req, res) => {
     );
 
     if (userResult.rows.length) {
-      await db.execute(
-        "UPDATE users SET google_token = ? WHERE correo = ?",
-        [JSON.stringify(tokens), userEmail]
-      );
+      await db.execute("UPDATE users SET google_token = ? WHERE correo = ?", [
+        JSON.stringify(tokens),
+        userEmail,
+      ]);
       res.cookie("userName", userResult.rows[0].nombre);
       return res.redirect("/rooms-form");
     }
@@ -367,18 +476,17 @@ app.get("/auth/google/callback", async (req, res) => {
 
 app.post("/choose-username", async (req, res) => {
   const { userName, password } = req.body;
-  
+
   if (!req.session?.googleEmail || !userName || !password) {
     return res.redirect("/choose-username?error=missing_data");
   }
 
   try {
     // Verificar nombre de usuario único
-    const exists = await db.execute(
-      "SELECT 1 FROM users WHERE nombre = ?",
-      [userName]
-    );
-    
+    const exists = await db.execute("SELECT 1 FROM users WHERE nombre = ?", [
+      userName,
+    ]);
+
     if (exists.rows.length) {
       return res.redirect("/choose-username?error=username_taken");
     }
@@ -386,7 +494,12 @@ app.post("/choose-username", async (req, res) => {
     // Crear nuevo usuario
     await db.execute(
       "INSERT INTO users (nombre, contraseña, correo, google_token) VALUES (?, ?, ?, ?)",
-      [userName, password, req.session.googleEmail, JSON.stringify(req.session.googleToken)]
+      [
+        userName,
+        password,
+        req.session.googleEmail,
+        JSON.stringify(req.session.googleToken),
+      ]
     );
 
     res.cookie("userName", userName);
@@ -400,58 +513,126 @@ app.post("/choose-username", async (req, res) => {
 });
 
 // Rutas de sala y grabaciones
-app.get("/room/:id", (req, res) => res.render("room", {
-  roomId: req.params.id,
-  userName: req.cookies.userName,
-  isAdmin: req.isAdmin,
-}));
+app.get("/room/:id", async (req, res) => {
+  const roomId = req.params.id;
+  const userName = req.cookies.userName;
 
-app.post("/api/upload-recording", upload.single("recording"), async (req, res) => {
   try {
-    if (!req.file) throw new Error("Archivo no recibido");
-    
-    const { roomId, adminUserName } = req.body;
-    if (!roomId || !adminUserName) throw new Error("Datos incompletos");
-
-    const { auth, folderId } = await getAdminDriveClient(adminUserName);
-    const drive = google.drive({ version: "v3", auth });
-
-    const { data } = await drive.files.create({
-      requestBody: {
-        name: `Grabacion-${roomId}-${Date.now()}.webm`,
-        mimeType: "video/webm",
-        parents: [folderId],
-      },
-      media: {
-        mimeType: "video/webm",
-        body: fs.createReadStream(req.file.path),
-      },
-      fields: "id,webViewLink",
-    });
-
-    // Limpieza
-    fs.unlink(req.file.path, () => {});
-    
-    res.json({ 
-      success: true,
-      fileId: data.id,
-      fileLink: data.webViewLink,
+    const isAdminRoom = await db.execute(
+      "SELECT 1 FROM rooms r JOIN users u ON r.admin = u.id WHERE r.id = ? AND u.nombre = ?",
+      [roomId, userName]
+    );
+    const isOpen = await checkRoomAvailability(roomId);
+    if (!isOpen) {
+      return res.render("room-closed");
+    }
+    res.render("room", {
+      roomId,
+      userName,
+      isAdmin: isAdminRoom.rows.length > 0,
     });
   } catch (error) {
-    console.error("Error subiendo grabación:", error);
-    
-    if (req.file?.path && fs.existsSync(req.file.path)) {
-      fs.unlinkSync(req.file.path);
-    }
-    
-    res.status(500).json({ 
-      error: "Error al subir", 
-      details: error.message 
-    });
+    console.error("Error verificando sala:", error);
+    res.render("room-closed");
   }
 });
 
-// Socket.io (optimizado)
+app.post(
+  "/api/upload-recording",
+  upload.single("recording"),
+  async (req, res) => {
+    try {
+      if (!req.file) throw new Error("Archivo no recibido");
+
+      const { roomId, adminUserName } = req.body;
+      if (!roomId || !adminUserName) throw new Error("Datos incompletos");
+
+      const { auth, folderId } = await getAdminDriveClient(adminUserName);
+      const drive = google.drive({ version: "v3", auth });
+
+      const { data } = await drive.files.create({
+        requestBody: {
+          name: `Grabacion-${roomId}-${Date.now()}.webm`,
+          mimeType: "video/webm",
+          parents: [folderId],
+        },
+        media: {
+          mimeType: "video/webm",
+          body: fs.createReadStream(req.file.path),
+        },
+        fields: "id,webViewLink",
+      });
+
+      //obtener la fecha de la sesion
+      const now = DateTime.utc();
+      const fechaLocal = now.toISODate();
+
+      const fechaResult = await db.execute(
+        "SELECT id FROM fechas WHERE roomId = ? AND fecha_local = ?",
+        [roomId, fechaLocal]
+      );
+      const fechaId = fechaResult.rows[0]?.id || null;
+
+      await db.execute(
+        "INSERT INTO grabaciones (fecha_id, titulo, direccion, es_publico) VALUES (?, ?, ?, ?)",
+        [
+          fechaId,
+          `Grabacion-${roomId}-${now.toFormat("yyyyLLdd-HHmmss")}`,
+          data.webViewLink,
+          0,
+        ]
+      );
+
+      // Limpieza
+      fs.unlink(req.file.path, () => {});
+
+      res.json({
+        success: true,
+        fileId: data.id,
+        fileLink: data.webViewLink,
+      });
+    } catch (error) {
+      console.error("Error subiendo grabación:", error);
+
+      if (req.file?.path && fs.existsSync(req.file.path)) {
+        fs.unlinkSync(req.file.path);
+      }
+
+      res.status(500).json({
+        error: "Error al subir",
+        details: error.message,
+      });
+    }
+  }
+);
+
+app.post("/update-recording/:recordingId", (req, res) => {
+  const { recordingId } = req.params;
+  const { title, es_publico } = req.body;
+  try {
+    db.execute(
+      "UPDATE grabaciones SET titulo = ?, es_publico = ? WHERE id = ?",
+      [title, es_publico ? 1 : 0, recordingId]
+    )
+      .then(() => {
+        res.redirect("/my-recordings");
+      })
+      .catch((error) => {
+        console.error("Error actualizando grabación:", error);
+        res
+          .status(500)
+          .json({ success: false, error: "Error al actualizar grabación" });
+      });
+  } catch (error) {
+    console.error("Error en la solicitud de actualización:", error);
+    res
+      .status(500)
+      .json({
+        success: false,
+        error: "Error en la solicitud de actualización",
+      });
+  }
+});
 const rooms = {};
 
 io.on("connection", (socket) => {
@@ -466,18 +647,20 @@ io.on("connection", (socket) => {
     const usersInRoom = Object.entries(rooms[roomId])
       .filter(([id]) => id !== socket.id)
       .map(([id, name]) => ({ userId: id, userName: name }));
-    
+
     socket.emit("users-in-room", usersInRoom);
     socket.to(roomId).emit("new-user", { userId: socket.id, userName });
   });
 
   // Manejo de eventos básicos
   const handleEvent = (event) => (data) => {
-    if (socket.roomId) socket.to(data.target).emit(event, { ...data, sender: socket.id });
+    if (socket.roomId)
+      socket.to(data.target).emit(event, { ...data, sender: socket.id });
   };
 
   socket.on("update-media-status", (data) => {
-    if (socket.roomId) socket.to(socket.roomId).emit("update-media-status", data);
+    if (socket.roomId)
+      socket.to(socket.roomId).emit("update-media-status", data);
   });
 
   socket.on("offer", handleEvent("offer"));
@@ -491,16 +674,16 @@ io.on("connection", (socket) => {
     }
   });
 
-  socket.on('chat message', (msg) => {
-    io.emit('chat message', msg)
-  })
+  socket.on("chat message", (msg) => {
+    io.emit("chat message", msg);
+  });
 
   socket.on("disconnect", () => {
     if (!socket.roomId || !rooms[socket.roomId]) return;
-    
+
     delete rooms[socket.roomId][socket.id];
     socket.to(socket.roomId).emit("user-disconnected", socket.id);
-    
+
     if (Object.keys(rooms[socket.roomId]).length === 0) {
       delete rooms[socket.roomId];
     }

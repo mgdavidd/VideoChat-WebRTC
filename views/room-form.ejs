@@ -1,23 +1,165 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ingreso a sala</title>
-    <link rel="stylesheet" href="./css/room-form.css">
-</head>
-<body>
+    <link rel="stylesheet" href="./css/room-form.css" />
+  </head>
+  <body>
     <div class="room-form-container">
-        <h1>Bienvenido <%= userName %></h1>
-        <h2>Ingreso</h2>
-        <form action="/join" method="post">
-            <label for="roomId">Room Id:</label>
-            <input type="text" id="roomId" name="roomId" required>
-            <button type="submit">Join</button>
+      <h1>Bienvenido <%= userName %></h1>
+      <h2>Ingreso</h2>
+      <form action="/join" method="post">
+        <label for="roomId">Room Id:</label>
+        <input type="text" id="roomId" name="roomId" required />
+        <button type="submit">Join</button>
+      </form>
+      <form action="/calendar-form">
+        <button type="submit">Calendario</button>
+      </form>
+
+      <% if (isAdmin === true || isAdmin === 'true') { %>
+        <!-- Solo la parte de "Tus Salas" -->
+        <form action="/your-rooms" style="margin-top: 18px;">
+          <button id="yourRooms" type="submit" class="your-rooms-btn">
+            Tus Salas
+          </button>
         </form>
-        <form action="/calendar-form">
-            <button type="submit">Calendario</button>
-        </form>
+        <div class="form-container" id="form-container" style="display: none">
+          <form action="/create-room" method="post" id="createRoomForm">
+            <input
+              type="text"
+              id="newRoomId"
+              name="newRoomId"
+              placeholder="Id de la nueva sala"
+              required
+            />
+            <button type="submit">Crear nueva sala</button>
+            <button type="button" id="cancelButton">Cancelar</button>
+          </form>
+        </div>
+        <div class="room-form-actions">
+          <button id="roomsButton" type="button">Crear Sala</button>
+          <button id="myRecordingsButton" type="button">Mis Grabaciones</button>
+        </div>
+      <% } %>
+    <button id="showActiveRoomsBtn" type="button" class="active-rooms-btn">Salas Activas</button>
+    <div id="activeRoomsList" class="active-rooms-list" style="display:none;">
+      <h3>Salas Activas</h3>
+      <ul>
+        <% activesRooms.forEach(function(room) { %>
+          <% if (room && room.id) { %>
+            <li>
+              <a href="/room/<%= room.id %>"><%= room.id %></a>
+            </li>
+          <% } %>
+        <% }) %>
+      </ul>
+</div>
+    <!-- Modal para salas activas -->
+    <div class="active-rooms-modal" id="activeRoomsModal" style="display: none;">
+      <div class="active-rooms-content">
+        <button class="close-active-rooms" id="closeActiveRooms" title="Cerrar">×</button>
+        <h3>Salas Activas</h3>
+        <ul>
+          <% activesRooms.forEach(function(room) { %>
+            <% if (room && room.id) { %>
+              <li>
+                <a href="/room/<%= room.id %>"><%= room.id %></a>
+              </li>
+            <% } %>
+          <% }) %>
+        </ul>
+      </div>
     </div>
-</body>
+    </div>
+
+    <script>
+      const isAdmin = <%= (isAdmin === true || isAdmin === 'true') ? 'true' : 'false' %>;
+
+      if (isAdmin === 'false') {
+        // Si existieran, los elimina del DOM
+        ["roomsButton", "myRecordingsButton", "yourRooms"].forEach(id => {
+          const btn = document.getElementById(id);
+          if (btn) btn.style.display = "none";
+        });
+        // También oculta el formulario flotante si existiera
+        const formContainer = document.getElementById("form-container");
+        if (formContainer) formContainer.style.display = "none";
+      }
+
+      // Previene submit si no es admin
+      document.addEventListener("DOMContentLoaded", function () {
+        if (isAdmin === 'false') {
+          // Tus Salas
+          const yourRoomsBtn = document.getElementById("yourRooms");
+          if (yourRoomsBtn) {
+            yourRoomsBtn.addEventListener("click", function (e) {
+              e.preventDefault();
+              alert("Solo los administradores pueden acceder a esta sección.");
+            });
+          }
+          // Crear Sala
+          const createRoomForm = document.getElementById("createRoomForm");
+          if (createRoomForm) {
+            createRoomForm.addEventListener("submit", function (e) {
+              e.preventDefault();
+              alert("Solo los administradores pueden crear salas.");
+            });
+          }
+          // Mis Grabaciones
+          const myRecordingsBtn = document.getElementById("myRecordingsButton");
+          if (myRecordingsBtn) {
+            myRecordingsBtn.addEventListener("click", function (e) {
+              e.preventDefault();
+              alert("Solo los administradores pueden acceder a esta sección.");
+            });
+          }
+          // Crear Sala (botón flotante)
+          const roomsBtn = document.getElementById("roomsButton");
+          if (roomsBtn) {
+            roomsBtn.addEventListener("click", function (e) {
+              e.preventDefault();
+              alert("Solo los administradores pueden crear salas.");
+            });
+          }
+        } else {
+          // Lógica normal para admin
+          document
+            .getElementById("roomsButton")
+            .addEventListener("click", function () {
+              const form = document.getElementById("form-container");
+              const cancelButton = document.getElementById("cancelButton");
+              if (form.style.display === "none") {
+                form.style.display = "block";
+                this.textContent = "Cancelar";
+                cancelButton.addEventListener(
+                  "click",
+                  function () {
+                    form.style.display = "none";
+                    document.getElementById("roomsButton").textContent = "Rooms";
+                  },
+                  { once: true }
+                );
+              } else {
+                form.style.display = "none";
+                this.textContent = "Rooms";
+              }
+            });
+
+          document.getElementById("myRecordingsButton").addEventListener("click", function () {
+            window.location.href = "/my-recordings";
+          });
+
+          document.getElementById("showActiveRoomsBtn").addEventListener("click", function() {
+            document.getElementById("activeRoomsModal").style.display = "flex";
+          });
+          document.getElementById("closeActiveRooms").addEventListener("click", function() {
+            document.getElementById("activeRoomsModal").style.display = "none";
+          });
+        }
+      });
+    </script>
+  </body>
 </html>
