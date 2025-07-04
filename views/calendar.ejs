@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Calendar-Multi con Fechas y Horas</title>
+  <title>Calendario de sesiones</title>
   <script type="module" src="https://unpkg.com/cally"></script>
   <link rel="stylesheet" href="/css/calendar.css" />
   <script src="https://cdn.jsdelivr.net/npm/luxon@3.0.4/build/global/luxon.min.js"></script>
@@ -11,11 +11,11 @@
 <body>
   <h1>
     Proponer Horario de Clase <br />
-    Room: <%= roomId %>
+    Sala: <%= roomId %>
   </h1>
 
   <div class="extra-link">
-    <a href="/calendar-form">Volver</a>
+    <a href="/rooms-form">Volver</a>
   </div>
 
   <calendar-multi id="myCalendar" months="2" value="">

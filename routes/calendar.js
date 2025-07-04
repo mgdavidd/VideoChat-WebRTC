@@ -3,30 +3,6 @@ const router = express.Router();
 const db = require("../db");
 const { DateTime } = require("luxon");
 
-// routes/calendar.js
-
-router.get("/calendar-form", async (req, res) => {
-  const { userName } = req.cookies;
-  try {
-    const rooms = await db.execute(
-      "SELECT r.id, u.nombre FROM rooms r JOIN users u ON r.admin = u.id"
-    );
-    const myRooms = await db.execute(
-      "SELECT r.id, u.nombre FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ?",
-      [userName]
-    );
-    res.render("calendar-form", {
-      rooms: rooms.rows,
-      myRooms: myRooms.rows,
-      error: req.query.error || null
-    });
-  } catch (err) {
-    console.error("Error obteniendo salas:", err);
-    res.render("calendar-form", { rooms: [], myRooms: [], error: "No se pudieron obtener las salas" });
-  }
-});
-
-// Redirección en caso de error en /calendar-form/:roomId
 router.get("/calendar-form/:roomId", async (req, res) => {
   const { roomId } = req.params;
   const { userName } = req.cookies;
@@ -41,7 +17,7 @@ router.get("/calendar-form/:roomId", async (req, res) => {
   if (result.rows.length > 0) {
     return res.render("calendar", { roomId, isOwner });
   } else {
-    return res.redirect("/calendar-form?error=La sala no existe");
+    return res.status(404).render("error-calendar", {message: "La sala no existe"});
   }
 });
 
