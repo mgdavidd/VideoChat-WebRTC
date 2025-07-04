@@ -163,3 +163,47 @@ button.google-log:hover {
   transform: translateY(-2px) scale(1.03);
   box-shadow: 0 4px 16px rgba(219, 68, 55, 0.25);
 }
+
+@media (max-width: 500px) {
+  .signup-container {
+    padding: 1.5rem 1.2rem;
+    max-width: 90vw;
+    margin: 0 1rem;
+  }
+  h1 {
+    font-size: 1.7rem;
+    margin-bottom: 1.2rem;
+  }
+  input[type="text"], 
+  input[type="password"],
+  input[type="email"],
+  button[type="submit"],
+  button.google-log {
+    font-size: 1rem;
+    padding: 0.8rem 1rem;
+  }
+  .extra-link {
+    font-size: 0.9rem;
+  }
+  label[for="isAdmin"] {
+    font-size: 0.95rem;
+    flex-wrap: wrap;
+  }
+  input[type="checkbox"]#isAdmin {
+    margin-left: 0;
+    margin-right: 0.7rem;
+  }
+  button.google-log small {
+    display: block;
+    margin-top: 0.3rem;
+  }
+}
+
+.error-message {
+  color: #d8000c;
+  padding: 6px 10px;
+  border-left: 4px solid #d8000c;
+  border-radius: 4px;
+  font-size: 13px;
+  margin-top: 4px;
+}

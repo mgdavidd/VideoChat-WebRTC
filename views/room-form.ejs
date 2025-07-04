@@ -1,162 +1,292 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
     <title>Ingreso a sala</title>
     <link rel="stylesheet" href="./css/room-form.css" />
   </head>
   <body>
     <div class="room-form-container">
       <h1>Bienvenido <%= userName %></h1>
-      <h2>Ingreso</h2>
-      <form action="/join" method="post">
-        <label for="roomId">Room Id:</label>
-        <input type="text" id="roomId" name="roomId" required />
-        <button type="submit">Join</button>
-      </form>
-      <form action="/calendar-form">
-        <button type="submit">Calendario</button>
-      </form>
+      <h2>Selecciona una sala</h2>
 
-      <% if (isAdmin === true || isAdmin === 'true') { %>
-        <!-- Solo la parte de "Tus Salas" -->
-        <form action="/your-rooms" style="margin-top: 18px;">
-          <button id="yourRooms" type="submit" class="your-rooms-btn">
-            Tus Salas
-          </button>
-        </form>
-        <div class="form-container" id="form-container" style="display: none">
-          <form action="/create-room" method="post" id="createRoomForm">
-            <input
-              type="text"
-              id="newRoomId"
-              name="newRoomId"
-              placeholder="Id de la nueva sala"
-              required
-            />
-            <button type="submit">Crear nueva sala</button>
-            <button type="button" id="cancelButton">Cancelar</button>
-          </form>
-        </div>
-        <div class="room-form-actions">
-          <button id="roomsButton" type="button">Crear Sala</button>
-          <button id="myRecordingsButton" type="button">Mis Grabaciones</button>
-        </div>
-      <% } %>
-    <button id="showActiveRoomsBtn" type="button" class="active-rooms-btn">Salas Activas</button>
-    <div id="activeRoomsList" class="active-rooms-list" style="display:none;">
-      <h3>Salas Activas</h3>
-      <ul>
-        <% activesRooms.forEach(function(room) { %>
-          <% if (room && room.id) { %>
-            <li>
-              <a href="/room/<%= room.id %>"><%= room.id %></a>
+      <div class="tabs">
+        <button class="tab-btn active" id="tabAllBtn">Todo</button>
+        <button class="tab-btn" id="tabActiveBtn">Activas</button>
+        <button class="tab-btn" id="tabMineBtn">Mis Salas</button>
+      </div>
+
+      <input type="text" id="searchRoom" placeholder="Buscar sala..." class="search-room-input" />
+
+      <!-- Todas las salas -->
+      <div class="tab-content active" id="tabAll">
+        <ul id="allRoomsList" class="rooms-list">
+          <% allRooms.rows.forEach(function(room) { %>
+            <li class="room-item" data-room="<%= room.id %>">
+              <span class="room-id"><%= room.id %></span>
+              <% const isActive = activesRooms.some(r => r && r.id === room.id); %>
+              <span class="room-status <%= isActive ? 'active-state' : 'inactive-state' %>">
+                <%= isActive ? '(Activa)' : '(Inactiva)' %>
+              </span>
+              <button class="join-room-btn <%= isActive ? 'active-room' : 'inactive-room' %>" data-room="<%= room.id %>">
+                Unirse
+              </button>
+              <button class="join-cal-btn" data-room="<%= room.id %>">
+                Calendario
+              </button>
             </li>
-          <% } %>
-        <% }) %>
-      </ul>
-</div>
-    <!-- Modal para salas activas -->
-    <div class="active-rooms-modal" id="activeRoomsModal" style="display: none;">
-      <div class="active-rooms-content">
-        <button class="close-active-rooms" id="closeActiveRooms" title="Cerrar">×</button>
-        <h3>Salas Activas</h3>
-        <ul>
+          <% }); %>
+        </ul>
+        <button id="showMoreAll" class="show-more-btn" style="display: none;">Ver más salas</button>
+      </div>
+
+      <!-- Salas activas -->
+      <div class="tab-content" id="tabActive">
+        <ul id="activeRoomsList" class="rooms-list">
           <% activesRooms.forEach(function(room) { %>
             <% if (room && room.id) { %>
-              <li>
-                <a href="/room/<%= room.id %>"><%= room.id %></a>
+              <li class="room-item" data-room="<%= room.id %>">
+                <span class="room-id"><%= room.id %></span>
+                <span class="room-status active-state">(Activa)</span>
+                <button class="join-room-btn" data-room="<%= room.id %>">Unirse</button>
               </li>
             <% } %>
-          <% }) %>
+          <% }); %>
+          <button id="showMoreActive" class="show-more-btn" style="display: none;">Ver más salas</button>
         </ul>
       </div>
-    </div>
+
+      <!-- Mis salas -->
+      <div class="tab-content" id="tabMine">
+        <ul id="myRoomsList" class="rooms-list">
+          <% ownersRooms.forEach(function(roomId) { %>
+            <li class="room-item" data-room="<%= roomId %>">
+              <span class="room-id"><%= roomId %></span>
+              <% const isActive = activesRooms.some(r => r && r.id === roomId); %>
+              <span class="room-status <%= isActive ? 'active-state' : 'inactive-state' %>">
+                <%= isActive ? '(Activa)' : '(Inactiva)' %>
+              </span>
+              <button class="join-room-btn <%= isActive ? 'active-room' : 'inactive-room' %>" data-room="<%= roomId %>">
+                Unirse
+              </button>
+              <button class="join-cal-btn" data-room="<%= roomId %>">
+                Calendario
+              </button>
+            </li>
+          <% }); %>
+        </ul>
+        <button id="showMoreMine" class="show-more-btn" style="display: none;">Ver más salas</button>
+      </div>
+
+      <!-- Ir a calendario -->
+      <form action="/calendar-form" style="width: 100%; margin-top: 0.5rem;">
+        <button type="submit" class="show-more-btn">Calendario</button>
+      </form>
+
+      <% if (isAdmin) { %>
+        <div class="admin-actions">
+          <div class="admin-buttons-row">
+            <!-- Botón de Mis Salas eliminado -->
+            <button class="admin-btn recordings-btn" onclick="window.location.href='/my-recordings'">Mis Grabaciones</button>
+          </div>
+          <div class="create-room-btn-container">
+            <button class="create-room-btn" id="showCreateRoomModal">Crear Sala</button>
+          </div>
+        </div>
+
+        <div class="create-room-modal" id="createRoomModal">
+          <div class="create-room-form">
+            <h3>Crear Nueva Sala</h3>
+            <input type="text" id="newRoomId" placeholder="ID de la nueva sala" required>
+            <div class="create-room-form-buttons">
+              <button type="button" class="create-room-submit" id="createRoomSubmit">Crear</button>
+              <button type="button" class="create-room-cancel" id="createRoomCancel">Cancelar</button>
+            </div>
+          </div>
+        </div>
+      <% } %>
     </div>
 
     <script>
-      const isAdmin = <%= (isAdmin === true || isAdmin === 'true') ? 'true' : 'false' %>;
+      document.addEventListener("DOMContentLoaded", function() {
+        const MAX_VISIBLE = 8;
+        const allRooms = Array.from(document.querySelectorAll('#allRoomsList .room-item'));
+        const activeRooms = Array.from(document.querySelectorAll('#activeRoomsList .room-item'));
+        const myRooms = Array.from(document.querySelectorAll('#myRoomsList .room-item'));
+        let showingAll = MAX_VISIBLE;
+        let showingActive = MAX_VISIBLE;
+        let showingMine = MAX_VISIBLE;
 
-      if (isAdmin === 'false') {
-        // Si existieran, los elimina del DOM
-        ["roomsButton", "myRecordingsButton", "yourRooms"].forEach(id => {
-          const btn = document.getElementById(id);
-          if (btn) btn.style.display = "none";
+        function updateVisibleRooms(list, showing, showMoreBtnId) {
+          let visibleCount = 0;
+          list.forEach(item => item.style.display = 'none');
+          list.forEach(item => {
+            if (visibleCount < showing && item.dataset.visible !== 'false') {
+              item.style.display = '';
+              visibleCount++;
+            }
+          });
+          const showMoreBtn = document.getElementById(showMoreBtnId);
+          if (showMoreBtn) {
+            const totalVisible = list.filter(item => item.dataset.visible !== 'false').length;
+            showMoreBtn.style.display = totalVisible > showing ? '' : 'none';
+          }
+        }
+
+        allRooms.forEach(item => item.dataset.visible = 'true');
+        activeRooms.forEach(item => item.dataset.visible = 'true');
+        myRooms.forEach(item => item.dataset.visible = 'true');
+        updateVisibleRooms(allRooms, showingAll, 'showMoreAll');
+        updateVisibleRooms(activeRooms, showingActive, 'showMoreActive');
+        updateVisibleRooms(myRooms, showingMine, 'showMoreMine');
+
+        document.getElementById('showMoreAll')?.addEventListener('click', function() {
+          showingAll += MAX_VISIBLE;
+          updateVisibleRooms(allRooms, showingAll, 'showMoreAll');
         });
-        // También oculta el formulario flotante si existiera
-        const formContainer = document.getElementById("form-container");
-        if (formContainer) formContainer.style.display = "none";
-      }
 
-      // Previene submit si no es admin
-      document.addEventListener("DOMContentLoaded", function () {
-        if (isAdmin === 'false') {
-          // Tus Salas
-          const yourRoomsBtn = document.getElementById("yourRooms");
-          if (yourRoomsBtn) {
-            yourRoomsBtn.addEventListener("click", function (e) {
-              e.preventDefault();
-              alert("Solo los administradores pueden acceder a esta sección.");
-            });
-          }
-          // Crear Sala
-          const createRoomForm = document.getElementById("createRoomForm");
-          if (createRoomForm) {
-            createRoomForm.addEventListener("submit", function (e) {
-              e.preventDefault();
-              alert("Solo los administradores pueden crear salas.");
-            });
-          }
-          // Mis Grabaciones
-          const myRecordingsBtn = document.getElementById("myRecordingsButton");
-          if (myRecordingsBtn) {
-            myRecordingsBtn.addEventListener("click", function (e) {
-              e.preventDefault();
-              alert("Solo los administradores pueden acceder a esta sección.");
-            });
-          }
-          // Crear Sala (botón flotante)
-          const roomsBtn = document.getElementById("roomsButton");
-          if (roomsBtn) {
-            roomsBtn.addEventListener("click", function (e) {
-              e.preventDefault();
-              alert("Solo los administradores pueden crear salas.");
-            });
-          }
-        } else {
-          // Lógica normal para admin
-          document
-            .getElementById("roomsButton")
-            .addEventListener("click", function () {
-              const form = document.getElementById("form-container");
-              const cancelButton = document.getElementById("cancelButton");
-              if (form.style.display === "none") {
-                form.style.display = "block";
-                this.textContent = "Cancelar";
-                cancelButton.addEventListener(
-                  "click",
-                  function () {
-                    form.style.display = "none";
-                    document.getElementById("roomsButton").textContent = "Rooms";
-                  },
-                  { once: true }
-                );
-              } else {
-                form.style.display = "none";
-                this.textContent = "Rooms";
-              }
-            });
+        document.getElementById('showMoreActive')?.addEventListener('click', function() {
+          showingActive += MAX_VISIBLE;
+          updateVisibleRooms(activeRooms, showingActive, 'showMoreActive');
+        });
 
-          document.getElementById("myRecordingsButton").addEventListener("click", function () {
-            window.location.href = "/my-recordings";
+        document.getElementById('showMoreMine')?.addEventListener('click', function() {
+          showingMine += MAX_VISIBLE;
+          updateVisibleRooms(myRooms, showingMine, 'showMoreMine');
+        });
+
+        const searchInput = document.getElementById('searchRoom');
+        searchInput.addEventListener('input', function() {
+          const filter = this.value.toLowerCase();
+          const activeTab = document.querySelector('.tab-content.active').id;
+
+          if (activeTab === 'tabAll') {
+            showingAll = MAX_VISIBLE;
+            allRooms.forEach(function(item) {
+              const roomId = item.querySelector('.room-id').textContent.toLowerCase();
+              item.dataset.visible = roomId.includes(filter) ? 'true' : 'false';
+            });
+            updateVisibleRooms(allRooms, showingAll, 'showMoreAll');
+          } else if (activeTab === 'tabActive') {
+            showingActive = MAX_VISIBLE;
+            activeRooms.forEach(function(item) {
+              const roomId = item.querySelector('.room-id').textContent.toLowerCase();
+              item.dataset.visible = roomId.includes(filter) ? 'true' : 'false';
+            });
+            updateVisibleRooms(activeRooms, showingActive, 'showMoreActive');
+          } else if (activeTab === 'tabMine') {
+            showingMine = MAX_VISIBLE;
+            myRooms.forEach(function(item) {
+              const roomId = item.querySelector('.room-id').textContent.toLowerCase();
+              item.dataset.visible = roomId.includes(filter) ? 'true' : 'false';
+            });
+            updateVisibleRooms(myRooms, showingMine, 'showMoreMine');
+          }
+        });
+
+        const tabAllBtn = document.getElementById('tabAllBtn');
+        const tabActiveBtn = document.getElementById('tabActiveBtn');
+        const tabMineBtn = document.getElementById('tabMineBtn');
+        const tabAll = document.getElementById('tabAll');
+        const tabActive = document.getElementById('tabActive');
+        const tabMine = document.getElementById('tabMine');
+
+        tabAllBtn.addEventListener('click', function() {
+          tabAllBtn.classList.add('active');
+          tabActiveBtn.classList.remove('active');
+          tabMineBtn.classList.remove('active');
+          tabAll.classList.add('active');
+          tabActive.classList.remove('active');
+          tabMine.classList.remove('active');
+          searchInput.value = '';
+          showingAll = MAX_VISIBLE;
+          allRooms.forEach(item => item.dataset.visible = 'true');
+          updateVisibleRooms(allRooms, showingAll, 'showMoreAll');
+        });
+
+        tabActiveBtn.addEventListener('click', function() {
+          tabActiveBtn.classList.add('active');
+          tabAllBtn.classList.remove('active');
+          tabMineBtn.classList.remove('active');
+          tabActive.classList.add('active');
+          tabAll.classList.remove('active');
+          tabMine.classList.remove('active');
+          searchInput.value = '';
+          showingActive = MAX_VISIBLE;
+          activeRooms.forEach(item => item.dataset.visible = 'true');
+          updateVisibleRooms(activeRooms, showingActive, 'showMoreActive');
+        });
+
+        tabMineBtn.addEventListener('click', function() {
+          tabMineBtn.classList.add('active');
+          tabAllBtn.classList.remove('active');
+          tabActiveBtn.classList.remove('active');
+          tabMine.classList.add('active');
+          tabAll.classList.remove('active');
+          tabActive.classList.remove('active');
+          searchInput.value = '';
+          showingMine = MAX_VISIBLE;
+          myRooms.forEach(item => item.dataset.visible = 'true');
+          updateVisibleRooms(myRooms, showingMine, 'showMoreMine');
+        });
+
+        document.querySelectorAll('.join-room-btn').forEach(function(btn) {
+          if (btn.classList.contains('inactive-room')) {
+            btn.disabled = true;
+          }
+          btn.addEventListener('click', function() {
+            const roomId = this.getAttribute('data-room');
+            window.location.href = '/room/' + encodeURIComponent(roomId);
           });
+        });
 
-          document.getElementById("showActiveRoomsBtn").addEventListener("click", function() {
-            document.getElementById("activeRoomsModal").style.display = "flex";
+        document.querySelectorAll('.join-cal-btn').forEach(function(btn) {
+          btn.addEventListener('click', function() {
+            const roomId = this.getAttribute('data-room');
+            return window.location.href = '/calendar-form/' + encodeURIComponent(roomId);
           });
-          document.getElementById("closeActiveRooms").addEventListener("click", function() {
-            document.getElementById("activeRoomsModal").style.display = "none";
+        });
+
+        const showModalBtn = document.getElementById('showCreateRoomModal');
+        const modal = document.getElementById('createRoomModal');
+        const cancelBtn = document.getElementById('createRoomCancel');
+        const createBtn = document.getElementById('createRoomSubmit');
+
+        if (showModalBtn && modal && cancelBtn) {
+          showModalBtn.addEventListener('click', () => modal.classList.add('active'));
+          cancelBtn.addEventListener('click', () => modal.classList.remove('active'));
+          modal.addEventListener('click', (e) => {
+            if (e.target === modal) modal.classList.remove('active');
+          });
+        }
+
+        if (createBtn) {
+          createBtn.addEventListener('click', function() {
+            const roomId = document.getElementById('newRoomId').value.trim();
+            if (roomId) {
+              fetch('/create-room', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `newRoomId=${encodeURIComponent(roomId)}`
+              }).then(response => {
+                if (response.ok) window.location.reload();
+                else alert('Error al crear la sala');
+              }).catch(error => {
+                console.error('Error:', error);
+                alert('Error al crear la sala');
+              });
+            }
+          });
+        }
+
+        const isAdmin = <%= JSON.stringify(!!isAdmin) %>;
+        if (!isAdmin) {
+          document.querySelectorAll('.admin-btn, .create-room-btn').forEach(btn => {
+            btn.addEventListener('click', e => {
+              e.preventDefault();
+              alert('Solo los administradores pueden realizar esta acción');
+            });
           });
         }
       });

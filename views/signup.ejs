@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>Registro</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <link rel="stylesheet" href="/css/signup.css">
 </head>
 <body>
@@ -10,7 +11,13 @@
     <h1>Registro</h1>
     <form method="POST" action="/signup">
       <input type="text" name="userName" placeholder="Nombre de usuario" required />
+      <% if (errorName) { %>
+        <div class="error-message"><%= errorName %></div>
+      <% } %>
       <input type="email" name="email" placeholder="Correo electrónico" required />
+      <% if (errorEmail) { %>
+        <div class="error-message"><%= errorEmail %></div>
+      <% } %>
       <input type="password" name="password" placeholder="Contraseña" required />
       <label for="isAdmin">
         <input type="checkbox" name="isAdmin" id="isAdmin" />

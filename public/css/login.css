@@ -151,3 +151,25 @@ button.google-log:hover {
   transform: translateY(-2px) scale(1.03);
   box-shadow: 0 4px 16px rgba(219, 68, 55, 0.25);
 }
+
+@media (max-width: 500px) {
+  .login-container {
+    padding: 1.5rem 1.2rem;
+    max-width: 90vw;
+    margin: 0 1rem;
+  }
+  h1 {
+    font-size: 1.7rem;
+    margin-bottom: 1.2rem;
+  }
+  input[type="text"], 
+  input[type="password"],
+  button[type="submit"],
+  button.google-log {
+    font-size: 1rem;
+    padding: 0.8rem 1rem;
+  }
+  .extra-link {
+    font-size: 0.9rem;
+  }
+}

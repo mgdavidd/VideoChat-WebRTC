@@ -7,27 +7,138 @@
 </head>
 <body>
     <div class="calendar-container">
-      <% if (typeof error !== "undefined" && error) { %>
-        <p class="error-message"><%= error %></p>
-      <% } %>
-
         <h1>Unirse a una sala</h1>
-        <form id="joinRoomForm" autocomplete="off">
-            <label for="roomId">ID de Sala</label>
-            <input type="text" id="roomId" name="roomId" required autocomplete="off">
-            <button type="submit">Ir a la sala</button>
-        </form>
+        <div class="tabs">
+          <button class="tab-btn active" id="tabRoomsBtn">Todo</button>
+          <button class="tab-btn" id="tabMyRoomsBtn">Mis Salas</button>
+        </div>
+        <input type="text" id="searchRoom" placeholder="Buscar sala..." autocomplete="off" class="search-room-input" />
+
+        <!-- Todas las salas -->
+        <div class="tab-content active" id="tabRooms">
+          <ul id="roomsList" class="rooms-list">
+            <% rooms.forEach(function(room) { %>
+              <li class="room-item" data-room="<%= room.id %>">
+                <span class="room-id"><%= room.id %></span>
+                <span class="room-admin">(admin: <%= room.nombre %>)</span>
+                <button class="go-calendar-btn" data-room="<%= room.id %>">Ir</button>
+              </li>
+            <% }) %>
+          </ul>
+          <button id="showMoreRooms" class="show-more-btn" style="display:none;">Ver más salas</button>
+        </div>
+
+        <!-- Mis salas -->
+        <div class="tab-content" id="tabMyRooms">
+          <ul id="myRoomsList" class="rooms-list">
+            <% myRooms.forEach(function(room) { %>
+              <li class="room-item" data-room="<%= room.id %>">
+                <span class="room-id"><%= room.id %></span>
+                <span class="room-admin">(admin: <%= room.nombre %>)</span>
+                <button class="go-calendar-btn" data-room="<%= room.id %>">Ir</button>
+              </li>
+            <% }) %>
+          </ul>
+          <button id="showMoreMyRooms" class="show-more-btn" style="display:none;">Ver más salas</button>
+        </div>
+
         <div class="extra-link">
             <a href="/rooms-form">Volver</a>
         </div>
+        <% if (error) { %>
+          <p class="error-message"><%= error %></p>
+        <% } %>
     </div>
     <script>
-      document.getElementById('joinRoomForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const roomId = document.getElementById('roomId').value.trim();
-        if(roomId) {
-          window.location.href = '/calendar-form/' + encodeURIComponent(roomId);
+      // Tabs
+      const tabRoomsBtn = document.getElementById('tabRoomsBtn');
+      const tabMyRoomsBtn = document.getElementById('tabMyRoomsBtn');
+      const tabRooms = document.getElementById('tabRooms');
+      const tabMyRooms = document.getElementById('tabMyRooms');
+      const searchInput = document.getElementById('searchRoom');
+
+      tabRoomsBtn.addEventListener('click', function() {
+        tabRoomsBtn.classList.add('active');
+        tabMyRoomsBtn.classList.remove('active');
+        tabRooms.classList.add('active');
+        tabMyRooms.classList.remove('active');
+        searchInput.value = '';
+        filterRooms();
+      });
+      tabMyRoomsBtn.addEventListener('click', function() {
+        tabMyRoomsBtn.classList.add('active');
+        tabRoomsBtn.classList.remove('active');
+        tabMyRooms.classList.add('active');
+        tabRooms.classList.remove('active');
+        searchInput.value = '';
+        filterRooms();
+      });
+
+      // Paginación y filtro para ambas listas
+      const MAX_VISIBLE = 8;
+      const rooms = Array.from(document.querySelectorAll('#roomsList .room-item'));
+      const myRooms = Array.from(document.querySelectorAll('#myRoomsList .room-item'));
+      let showingRooms = MAX_VISIBLE;
+      let showingMyRooms = MAX_VISIBLE;
+
+      function updateVisibleRooms(list, showing, showMoreBtnId) {
+        let visibleCount = 0;
+        list.forEach((item, idx) => {
+          if (item.style.display !== 'none') {
+            item.style.display = visibleCount < showing ? '' : 'none';
+            visibleCount++;
+          }
+        });
+        document.getElementById(showMoreBtnId).style.display = visibleCount > showing ? '' : 'none';
+      }
+
+      function filterRooms() {
+        const filter = searchInput.value.toLowerCase();
+        if (tabRooms.classList.contains('active')) {
+          let count = 0;
+          rooms.forEach(function(item) {
+            const roomId = item.querySelector('.room-id').textContent.toLowerCase();
+            const admin = item.querySelector('.room-admin').textContent.toLowerCase();
+            const match = roomId.includes(filter) || admin.includes(filter);
+            item.style.display = match && count < showingRooms ? '' : 'none';
+            if (match) count++;
+          });
+          document.getElementById('showMoreRooms').style.display = count > showingRooms ? '' : 'none';
+        } else {
+          let count = 0;
+          myRooms.forEach(function(item) {
+            const roomId = item.querySelector('.room-id').textContent.toLowerCase();
+            const admin = item.querySelector('.room-admin').textContent.toLowerCase();
+            const match = roomId.includes(filter) || admin.includes(filter);
+            item.style.display = match && count < showingMyRooms ? '' : 'none';
+            if (match) count++;
+          });
+          document.getElementById('showMoreMyRooms').style.display = count > showingMyRooms ? '' : 'none';
         }
+      }
+
+      // Inicialización
+      filterRooms();
+
+      document.getElementById('showMoreRooms').addEventListener('click', function() {
+        showingRooms += MAX_VISIBLE;
+        filterRooms();
+      });
+      document.getElementById('showMoreMyRooms').addEventListener('click', function() {
+        showingMyRooms += MAX_VISIBLE;
+        filterRooms();
+      });
+
+      searchInput.addEventListener('input', filterRooms);
+
+      // Navegación al hacer click en "Ir"
+      document.querySelectorAll('.go-calendar-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+          const roomId = this.getAttribute('data-room');
+          if(roomId) {
+            window.location.href = '/calendar-form/' + encodeURIComponent(roomId);
+          }
+        });
       });
     </script>
 </body>
