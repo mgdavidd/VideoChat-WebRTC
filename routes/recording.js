@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const fs = require("fs");
 const db = require("../db");
-const { upload, uploadDir } = require("../uploadConfig");
+const { upload } = require("../uploadConfig");
 const { DateTime } = require("luxon");
 const { getAdminDriveClient } = require("../driveUtils");
 const { google } = require("googleapis");
@@ -36,10 +36,44 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
   try {
     if (!req.file) throw new Error("Archivo no recibido");
 
-    const { roomId, adminUserName } = req.body;
+    const { roomId, adminUserName, fromMot } = req.body;
     if (!roomId || !adminUserName) throw new Error("Datos incompletos");
 
-    const { auth, folderId } = await getAdminDriveClient(adminUserName);
+    let folderId = null;
+
+    // Enviar grabación al servidor MOT si viene de otra instancia
+    if (fromMot === "true") {
+      const FormData = require("form-data");
+
+      await new Promise((resolve, reject) => {
+        const form = new FormData();
+        form.append("recording", fs.createReadStream(req.file.path));
+        form.append("roomId", roomId);
+        form.append("adminUserName", adminUserName);
+
+        form.submit(`${process.env.MOT_API_URL}/api/upload-recording`, (err, motRes) => {
+          if (err) return reject(err);
+
+          let body = "";
+          motRes.on("data", chunk => body += chunk);
+          motRes.on("end", () => {
+            try {
+              const motJson = JSON.parse(body);
+              console.log("Respuesta de MOT:", motJson);
+              resolve();
+              return
+            } catch (e) {
+              reject(new Error("Respuesta de MOT inválida"));
+            }
+          });
+        });
+      });
+      // Si viene de MOT, no subimos al Drive del admin
+      return res.json({ success: true, message: "Grabación enviada a MOT" });
+    }
+
+    // Subir al Drive del admin
+    const { auth } = await getAdminDriveClient(adminUserName, folderId);
     const drive = google.drive({ version: "v3", auth });
 
     const { data } = await drive.files.create({
@@ -55,6 +89,7 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
       fields: "id,webViewLink",
     });
 
+    // Obtener id de la fecha para insertar la grabación
     const now = DateTime.utc();
     const fechaLocal = now.toISODate();
 

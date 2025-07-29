@@ -71,6 +71,8 @@ function stopRecordingAndUpload() {
         formData.append("recording", blob, "grabacion.webm");
         formData.append("roomId", roomId);
         formData.append("adminUserName", userNameLocal);
+        formData.append("fromMot", fromMot ? "true" : "false");
+
 
         try {
           const res = await fetch("/api/upload-recording", {
@@ -205,6 +207,10 @@ async function exitButton() {
     localStream = null;
   }
 
+  if(fromMot && userRole === 'profesor') {
+    return window.location.href = "http://localhost:5173/InstructorNav";
+  }
+
   document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
   window.location.href = "/";
 }
@@ -297,7 +303,7 @@ async function addIceCandidates(userId, peerConnection) {
 }
 
 async function start() {
-  if (isAdmin) {
+  if (isAdmin || (fromMot && userRole === 'profesor')) {
     try {
       // 1. Capturar pantalla (con o sin audio)
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
@@ -340,7 +346,7 @@ async function start() {
         mimeType: "video/webm; codecs=vp9",
       });
 
-      mediaRecorder.ondataavailable = function(event) {
+      mediaRecorder.ondataavailable = function (event) {
         if (event.data.size > 0) {
           recordedChunks.push(event.data);
         }
@@ -417,7 +423,7 @@ socket.on("kicked", () => {
 });
 
 socket.on("force-close-room", async () => {
-    if (isAdmin && mediaRecorder && mediaRecorder.state !== "inactive") {
+  if (isAdmin && mediaRecorder && mediaRecorder.state !== "inactive") {
     await stopRecordingAndUpload();
   }
   alert("La videollamada ha finalizado.");

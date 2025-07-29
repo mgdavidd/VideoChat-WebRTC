@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sala <%= roomId %></title>
-    <link rel="stylesheet" href="/css/room.css">
+    <link rel="stylesheet" href="/css/room.css" />
   </head>
   <body>
     <h1>Bienvenido a la sala: <%= roomId %></h1>
@@ -25,7 +25,7 @@
           <img src="/img/pantalla-completa.png" alt="Pantalla completa" />
         </button>
         <button onclick="exitButton()">
-          <img src="/img/salida.png" alt="">
+          <img src="/img/salida.png" alt="" />
         </button>
       </div>
     </div>
@@ -39,7 +39,13 @@
       <section id="chat">
         <ul id="messages"></ul>
         <form id="form-chat">
-          <input type="text" name="message" id="input-chat" placeholder="Type a message" autocomplete="off" />
+          <input
+            type="text"
+            name="message"
+            id="input-chat"
+            placeholder="Type a message"
+            autocomplete="off"
+          />
           <button type="submit">Enviar</button>
         </form>
       </section>
@@ -54,15 +60,23 @@
       // Pasar el roomId al cliente
       const roomId = "<%= roomId %>";
       const userNameLocal = "<%= userName %>";
-      const isAdmin = "<%= isAdmin %>" === "true" ? true : false
+      console.log("<%= isAdmin %>")
+      const isAdmin = <%- isAdmin %>;
 
-      const chatContainer = document.querySelector('.chat-container');
-      const toggleChatBtn = document.getElementById('toggle-chat');
-      toggleChatBtn.addEventListener('click', () => {
-        chatContainer.classList.toggle('minimized');
-        toggleChatBtn.title = chatContainer.classList.contains('minimized') ? "Maximizar" : "Minimizar";
+      const chatContainer = document.querySelector(".chat-container");
+      const toggleChatBtn = document.getElementById("toggle-chat");
+      toggleChatBtn.addEventListener("click", () => {
+        chatContainer.classList.toggle("minimized");
+        toggleChatBtn.title = chatContainer.classList.contains("minimized")
+          ? "Maximizar"
+          : "Minimizar";
       });
     </script>
+    <script>
+      const fromMot = <%- JSON.stringify(typeof fromMot !== 'undefined' ? fromMot : false) %>;
+      const userRole = <%- JSON.stringify(typeof userRole !== 'undefined' ? userRole : null) %>;
+    </script>
+
     <script src="/js/client.js" type="module"></script>
     <script src="/js/messages.js"></script>
   </body>
