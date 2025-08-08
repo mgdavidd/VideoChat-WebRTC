@@ -9,12 +9,12 @@ const axios = require("axios");
 const JWT_SECRET = process.env.JWT_SECRET || "clave_super_segura";
 
 router.post("/api/calls", async (req, res) => {
-  const {
-    course_id,
-    session_date,
-    start_utc,
-    end_utc,
-    room_id: existingRoomId
+  const { 
+    course_id, 
+    session_date, 
+    start_utc, 
+    end_utc, 
+    room_id: existingRoomId 
   } = req.body;
 
   if (!start_utc || !end_utc) {
@@ -24,7 +24,7 @@ router.post("/api/calls", async (req, res) => {
   // Validar formatos UTC
   const startUTC = DateTime.fromISO(start_utc, { zone: "utc" });
   const endUTC = DateTime.fromISO(end_utc, { zone: "utc" });
-
+  
   if (!startUTC.isValid || !endUTC.isValid) {
     return res.status(400).json({ error: "Formato de fecha UTC inválido" });
   }
@@ -44,7 +44,7 @@ router.post("/api/calls", async (req, res) => {
          WHERE course_id = ? AND DATE(start_time) = ?`,
         [course_id, session_date]
       );
-
+      
       if (existing.rows.length > 0) {
         room_id = existing.rows[0].room_id;
         isNewRoom = false;
@@ -83,9 +83,9 @@ router.post("/api/calls", async (req, res) => {
       room_id,
       link,
       is_new: isNewRoom,
-      utc_timestamps: {
-        start: startUTC.toISO(),
-        end: endUTC.toISO()
+      utc_timestamps: { 
+        start: startUTC.toISO(), 
+        end: endUTC.toISO() 
       }
     });
 
@@ -110,7 +110,7 @@ router.get("/join", async (req, res) => {
   }
 
   // Obtener información del usuario
-  const userJwt = req.query.userToken || req.cookies.token || req.headers.authorization?.split(" ")[1];
+  const userJwt = req.cookies.token || req.headers.authorization?.split(" ")[1];
   let userData = {
     payload: null,
     role: null,
@@ -161,9 +161,7 @@ router.get("/join", async (req, res) => {
     }
 
     // Validar acceso al curso usando la API interna
-    const MOT_API = process.env.MOT_API_URL
-    console.log(`${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`)
-    console.log(`Bearer ${process.env.INTERNAL_API_KEY}`)
+    const MOT_API = process.env.MOT_API_URL 
     try {
       const { data } = await axios.get(
         `${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`,
@@ -181,15 +179,15 @@ router.get("/join", async (req, res) => {
       return res.render("inactive", { error: "Error al verificar tu acceso al curso" });
     }
 
+    // Obtener módulos para profesores
     let modules = [];
     if (userData.role === "profesor") {
       try {
-        console.log(`${MOT_API}/courses/${room.course_id}/modules/${userData.id}`)
         const response = await axios.get(
-          `${MOT_API}/courses/${room.course_id}/modules/${userData.id}`,
-          {
+          `http://localhost:3000/courses/${room.course_id}/modules/${userData.id}`,
+          { 
             headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
-            timeout: 5000
+            timeout: 5000 
           }
         );
         modules = response.data || [];
