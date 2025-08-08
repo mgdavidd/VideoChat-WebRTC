@@ -161,9 +161,11 @@ router.get("/join", async (req, res) => {
     }
 
     // Validar acceso al curso usando la API interna
+    const MOT_API = process.env.MOT_API_URL 
+    console.log(`${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`)
     try {
       const { data } = await axios.get(
-        `http://localhost:3000/api/validate-course-access/${userData.id}/${room.course_id}`,
+        `${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`,
         {
           headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
           timeout: 5000
@@ -182,8 +184,9 @@ router.get("/join", async (req, res) => {
     let modules = [];
     if (userData.role === "profesor") {
       try {
+        console.log(`${MOT_API}/courses/${room.course_id}/modules/${userData.id}`)
         const response = await axios.get(
-          `http://localhost:3000/courses/${room.course_id}/modules/${userData.id}`,
+          `${MOT_API}/courses/${room.course_id}/modules/${userData.id}`,
           { 
             headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
             timeout: 5000 

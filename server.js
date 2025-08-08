@@ -22,6 +22,7 @@ const io = socketIo(server, {
 });
 
 const MOT_API = process.env.MOT_API_URL || 'https://tu-dominio-mot.com/api';
+console.log(MOT_API)
 
 async function verifyScheduledCall(token, jwt) {
   const res = await axios.get(`${MOT_API}/video-links/${token}`, {
