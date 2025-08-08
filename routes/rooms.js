@@ -107,7 +107,11 @@ router.get("/room/:id", async (req, res) => {
       roomId,
       userName,
       isAdmin: isAdminRoom.rows.length > 0,
+      fromMot: false,
+      userRole: null,
+      listModulesCourse: []
     });
+
   } catch (error) {
     console.error("Error verificando sala:", error);
     res.render("room-closed");

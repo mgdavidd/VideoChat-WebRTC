@@ -5,76 +5,163 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sala <%= roomId %></title>
     <link rel="stylesheet" href="/css/room.css" />
+    <script src="https://cdn.jsdelivr.net/npm/luxon@3.4.4/build/global/luxon.min.js"></script>
   </head>
   <body>
-    <h1>Bienvenido a la sala: <%= roomId %></h1>
-    <div id="localVideoContainer">
-      <video id="localVideo" autoplay muted></video>
-      <div id="localControls">
-        <!-- Botones de control -->
-        <button onclick="toggleCamera()" id="btnCamara" class="btnCamara">
-          <img src="/img/camara.png" alt="icono camara" id="iconoCamara" />
-        </button>
-        <button onclick="toggleAudio()" id="btnAudio" class="btnAudio">
-          <img src="/img/audio.png" alt="icono audio" id="iconoAudio" />
-        </button>
-        <button onclick="changeMedia()" class="btnScreen">
-          <img src="/img/compartir-pantalla.png" alt="" id="buttonScreen" />
-        </button>
-        <button class="btnFullScreen" id="btnFullScreen">
-          <img src="/img/pantalla-completa.png" alt="Pantalla completa" />
-        </button>
-        <button onclick="exitButton()">
-          <img src="/img/salida.png" alt="" />
-        </button>
+    <!-- Modal para selección de módulo -->
+    <div id="moduleModal">
+      <div class="modal-content">
+        <h2>Selecciona el módulo para esta sesión</h2>
+        <p>Por favor, elige el módulo que vas a enseñar hoy:</p>
+        
+        <div class="module-list" id="moduleList">
+          <!-- Los módulos se cargarán aquí dinámicamente -->
+        </div>
+        
+        <button id="confirmModuleBtn" disabled>Confirmar e ingresar</button>
       </div>
     </div>
-    <div id="remoteVideos"></div>
 
-    <div class="chat-container">
-      <div class="chat-header">
-        <span>Chat</span>
-        <button id="toggle-chat" title="Minimizar/Maximizar">&#x1F5D5;</button>
+    <!-- Contenido principal (oculto inicialmente para profesores MOT) -->
+    <div id="mainContent" style="display: none;">
+      <h1>Bienvenido a la sala: <%= roomId %></h1>
+      <div id="localVideoContainer">
+        <video id="localVideo" autoplay muted></video>
+        <div id="localControls">
+          <button onclick="toggleCamera()" id="btnCamara" class="btnCamara">
+            <img src="/img/camara.png" alt="icono camara" id="iconoCamara" />
+          </button>
+          <button onclick="toggleAudio()" id="btnAudio" class="btnAudio">
+            <img src="/img/audio.png" alt="icono audio" id="iconoAudio" />
+          </button>
+          <button onclick="changeMedia()" class="btnScreen">
+            <img src="/img/compartir-pantalla.png" alt="" id="buttonScreen" />
+          </button>
+          <button class="btnFullScreen" id="btnFullScreen">
+            <img src="/img/pantalla-completa.png" alt="Pantalla completa" />
+          </button>
+          <button onclick="exitButton()">
+            <img src="/img/salida.png" alt="" />
+          </button>
+        </div>
       </div>
-      <section id="chat">
-        <ul id="messages"></ul>
-        <form id="form-chat">
-          <input
-            type="text"
-            name="message"
-            id="input-chat"
-            placeholder="Type a message"
-            autocomplete="off"
-          />
-          <button type="submit">Enviar</button>
-        </form>
-      </section>
+      <div id="remoteVideos"></div>
+
+      <div class="chat-container">
+        <div class="chat-header">
+          <span>Chat</span>
+          <button id="toggle-chat" title="Minimizar/Maximizar">&#x1F5D5;</button>
+        </div>
+        <section id="chat">
+          <ul id="messages"></ul>
+          <form id="form-chat">
+            <input
+              type="text"
+              name="message"
+              id="input-chat"
+              placeholder="Type a message"
+              autocomplete="off"
+            />
+            <button type="submit">Enviar</button>
+          </form>
+        </section>
+      </div>
     </div>
 
-    <!-- Incluir Socket.io y el script del cliente -->
     <script src="/socket.io/socket.io.js"></script>
     <script>
       window.socket = io();
-    </script>
-    <script>
-      // Pasar el roomId al cliente
+      
+      // Variables globales
       const roomId = "<%= roomId %>";
       const userNameLocal = "<%= userName %>";
-      console.log("<%= isAdmin %>")
       const isAdmin = <%- isAdmin %>;
-
-      const chatContainer = document.querySelector(".chat-container");
-      const toggleChatBtn = document.getElementById("toggle-chat");
-      toggleChatBtn.addEventListener("click", () => {
-        chatContainer.classList.toggle("minimized");
-        toggleChatBtn.title = chatContainer.classList.contains("minimized")
-          ? "Maximizar"
-          : "Minimizar";
-      });
-    </script>
-    <script>
+      const listModulesCourse = <%- JSON.stringify(listModulesCourse) %> || [];
       const fromMot = <%- JSON.stringify(typeof fromMot !== 'undefined' ? fromMot : false) %>;
       const userRole = <%- JSON.stringify(typeof userRole !== 'undefined' ? userRole : null) %>;
+      
+      // Variable global para el módulo seleccionado
+      let selectedModuleId = null;
+      
+      // Mostrar modal solo si es profesor de MOT con módulos disponibles
+      if (fromMot && userRole === 'profesor' && listModulesCourse.length > 0) {
+        document.addEventListener('DOMContentLoaded', () => {
+          const modal = document.getElementById('moduleModal');
+          const moduleList = document.getElementById('moduleList');
+          const confirmBtn = document.getElementById('confirmModuleBtn');
+          const mainContent = document.getElementById('mainContent');
+          
+          // Mostrar modal y ocultar contenido principal
+          modal.style.display = 'flex';
+          mainContent.style.display = 'none';
+          
+          // Llenar la lista de módulos con sus colores
+          listModulesCourse.forEach(module => {
+            const moduleItem = document.createElement('div');
+            moduleItem.className = 'module-item';
+            moduleItem.style.borderLeftColor = module.color;
+            moduleItem.innerHTML = module.nombre;
+            moduleItem.dataset.id = module.id;
+            
+            moduleItem.addEventListener('click', () => {
+              // Deseleccionar cualquier otro módulo
+              document.querySelectorAll('.module-item').forEach(item => {
+                item.classList.remove('selected');
+              });
+              
+              // Seleccionar este módulo
+              moduleItem.classList.add('selected');
+              selectedModuleId = module.id;
+              confirmBtn.disabled = false;
+            });
+            
+            moduleList.appendChild(moduleItem);
+          });
+          
+          confirmBtn.addEventListener('click', () => {
+            if (selectedModuleId) {
+              console.log('Módulo seleccionado - ID:', selectedModuleId);
+              
+              // Guardar el ID seleccionado en una variable global accesible desde client.js
+              window.selectedModuleId = selectedModuleId;
+              
+              // Ocultar modal y mostrar contenido principal
+              modal.style.display = 'none';
+              mainContent.style.display = 'block';
+              
+              // Iniciar la lógica de la videollamada
+              initializeCall();
+            }
+          });
+        });
+      } else {
+        // Si no es profesor MOT o no hay módulos, mostrar contenido directamente
+        document.addEventListener('DOMContentLoaded', () => {
+          document.getElementById('mainContent').style.display = 'block';
+          initializeCall();
+        });
+      }
+      
+      // Función para inicializar la llamada (será llamada después de seleccionar módulo o directamente)
+      function initializeCall() {
+        // Aquí puedes acceder a window.selectedModuleId si es necesario
+        if (fromMot && userRole === 'profesor' && window.selectedModuleId) {
+          console.log('Iniciando llamada con módulo:', window.selectedModuleId);
+          // Tu lógica adicional aquí...
+        }
+        
+        // Configuración del chat
+        const chatContainer = document.querySelector(".chat-container");
+        const toggleChatBtn = document.getElementById("toggle-chat");
+        if (toggleChatBtn) {
+          toggleChatBtn.addEventListener("click", () => {
+            chatContainer.classList.toggle("minimized");
+            toggleChatBtn.title = chatContainer.classList.contains("minimized")
+              ? "Maximizar"
+              : "Minimizar";
+          });
+        }
+      }
     </script>
 
     <script src="/js/client.js" type="module"></script>

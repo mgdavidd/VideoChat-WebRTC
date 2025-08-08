@@ -18,7 +18,6 @@ const pendingOffers = [];
 let localStream = null;
 let camera = true;
 
-// Evento para el usuario nuevo (solo crea conexiones y envía offer)
 socket.on("users-in-room", (usersArray) => {
   usersArray.forEach(({ userId, userName }) => {
     users[userId] = userName;
@@ -26,7 +25,6 @@ socket.on("users-in-room", (usersArray) => {
   });
 });
 
-// Evento para los usuarios viejos (NO crean conexión aquí, solo esperan offer)
 socket.on("new-user", ({ userId, roomId: remoteRoomId, userName }) => {
   users[userId] = userName;
 });
@@ -62,9 +60,14 @@ function updateLocalStream(newStream) {
   });
 }
 
-function stopRecordingAndUpload() {
+let isUploading = false;
+
+async function stopRecordingAndUpload() {
   return new Promise((resolve) => {
+    if (isUploading) return resolve();
+
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
+      isUploading = true;
       mediaRecorder.onstop = async function () {
         const blob = new Blob(recordedChunks, { type: "video/webm" });
         const formData = new FormData();
@@ -73,6 +76,12 @@ function stopRecordingAndUpload() {
         formData.append("adminUserName", userNameLocal);
         formData.append("fromMot", fromMot ? "true" : "false");
 
+        const userTimeZone = luxon.DateTime.local().zoneName;
+        formData.append("userTimeZone", userTimeZone);
+
+        if (window.selectedModuleId) {
+          formData.append("selectedModuleId", window.selectedModuleId);
+        }
 
         try {
           const res = await fetch("/api/upload-recording", {
@@ -81,12 +90,13 @@ function stopRecordingAndUpload() {
           });
 
           const result = await res.json();
-          console.log("Resultado de subida:", result);
+          console.log("Grabación subida:", result);
         } catch (err) {
           console.error("Error al subir grabación:", err);
+        } finally {
+          isUploading = false;
+          resolve();
         }
-
-        resolve();
       };
 
       mediaRecorder.stop();
@@ -207,7 +217,7 @@ async function exitButton() {
     localStream = null;
   }
 
-  if(fromMot && userRole === 'profesor') {
+  if (fromMot && userRole === 'profesor') {
     return window.location.href = "http://localhost:5173/InstructorNav";
   }
 
@@ -360,7 +370,6 @@ async function start() {
       };
 
       mediaRecorder.start();
-      console.log("Grabación iniciada por admin");
     } catch (err) {
       console.error("Error al iniciar grabación:", err);
       if (err.name !== 'NotAllowedError') {
@@ -426,8 +435,18 @@ socket.on("force-close-room", async () => {
   if (isAdmin && mediaRecorder && mediaRecorder.state !== "inactive") {
     await stopRecordingAndUpload();
   }
-  alert("La videollamada ha finalizado.");
-  window.location.href = "/rooms-form";
+
+  setTimeout(() => {
+    alert("La videollamada ha finalizado automáticamente.");
+
+    if (fromMot && userRole === 'profesor') {
+      window.location.href = "http://localhost:5173/InstructorNav";
+    } else if (fromMot) {
+      window.location.href = "http://localhost:5173/studentsNav";
+    } else {
+      window.location.href = "/rooms-form";
+    }
+  }, 5000);
 });
 
 window.addEventListener("beforeunload", (e) => {

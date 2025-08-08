@@ -7,6 +7,9 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const cors = require('cors');
 const axios = require('axios');
+const { uploadDir } = require("./uploadConfig");
+const fs = require("fs");
+
 
 const app = express();
 const server = http.createServer(app);
@@ -36,6 +39,13 @@ async function verifyScheduledCall(token, jwt) {
 
   return true;
 }
+
+process.on("SIGINT", () => {
+  if (fs.existsSync(uploadDir)) {
+    fs.rmSync(uploadDir, { recursive: true, force: true });
+  }
+  process.exit();
+});
 
 // Middlewares
 app.use(cookieParser());
