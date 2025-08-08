@@ -163,6 +163,7 @@ router.get("/join", async (req, res) => {
     // Validar acceso al curso usando la API interna
     const MOT_API = process.env.MOT_API_URL
     console.log(`${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`)
+    console.log(`Bearer ${process.env.INTERNAL_API_KEY}`)
     try {
       const { data } = await axios.get(
         `${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`,
