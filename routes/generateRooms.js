@@ -122,7 +122,7 @@ router.get("/join", async (req, res) => {
   if (userJwt) {
     try {
       userData.payload = jwt.verify(userJwt, JWT_SECRET);
-      userData.role = userData.payload.role;
+      userData.role = userData.payload.rol;
       userData.name = userData.payload.nombre;
       userData.email = userData.payload.email;
       userData.id = userData.payload.id;
