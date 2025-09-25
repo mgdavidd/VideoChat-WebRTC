@@ -37,10 +37,10 @@ router.post("/api/calls", async (req, res) => {
 
   try {
     let room_id = existingRoomId || uuidv4();
-    let isNewRoom = true;
+    let link;
 
-    // Buscar sala existente por fecha
     if (!existingRoomId) {
+      // buscar por fecha y curso
       const existing = await db.execute(
         `SELECT room_id, link FROM llamadas_mot 
          WHERE course_id = ? AND DATE(start_time) = ?`,
@@ -49,7 +49,16 @@ router.post("/api/calls", async (req, res) => {
       
       if (existing.rows.length > 0) {
         room_id = existing.rows[0].room_id;
-        const link = existing.rows[0].link;
+        link = existing.rows[0].link;
+
+        // 🔄 actualizar a las nuevas horas
+        await db.execute(
+          `UPDATE llamadas_mot 
+           SET start_time = ?, end_time = ? 
+           WHERE room_id = ?`,
+          [startUTC.toISO(), endUTC.toISO(), room_id]
+        );
+
         return res.json({
           room_id,
           link,
@@ -58,24 +67,34 @@ router.post("/api/calls", async (req, res) => {
         });
       }
     } else {
-      // Verificar si existe por room_id
+      // verificar si existe por room_id
       const existing = await db.execute(
         `SELECT room_id, link FROM llamadas_mot WHERE room_id = ?`,
         [room_id]
       );
       if (existing.rows.length > 0) {
+        link = existing.rows[0].link;
+
+        // 🔄 actualizar a las nuevas horas
+        await db.execute(
+          `UPDATE llamadas_mot 
+           SET start_time = ?, end_time = ? 
+           WHERE room_id = ?`,
+          [startUTC.toISO(), endUTC.toISO(), room_id]
+        );
+
         return res.json({
           room_id,
-          link: existing.rows[0].link,
+          link,
           is_new: false,
           utc_timestamps: { start: startUTC.toISO(), end: endUTC.toISO() }
         });
       }
     }
 
-    // Si llegamos aquí, sí creamos una nueva sala
+    // 🚀 crear nueva sala
     const token = jwt.sign({ room_id, course_id }, JWT_SECRET);
-    const link = `/join?token=${token}`;
+    link = `/join?token=${token}`;
 
     await db.execute(
       `INSERT INTO llamadas_mot (course_id, room_id, link, start_time, end_time)
@@ -95,6 +114,7 @@ router.post("/api/calls", async (req, res) => {
     return res.status(500).json({ error: "Error al procesar la sala" });
   }
 });
+
 
 // ========================
 // Ingreso a la sala
