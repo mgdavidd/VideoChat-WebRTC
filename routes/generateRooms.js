@@ -8,6 +8,9 @@ const axios = require("axios");
 
 const JWT_SECRET = process.env.JWT_SECRET || "clave_super_segura";
 
+// ========================
+// Crear/obtener sala
+// ========================
 router.post("/api/calls", async (req, res) => {
   const { 
     course_id, 
@@ -21,7 +24,6 @@ router.post("/api/calls", async (req, res) => {
     return res.status(400).json({ error: "Faltan campos requeridos" });
   }
 
-  // Validar formatos UTC
   const startUTC = DateTime.fromISO(start_utc, { zone: "utc" });
   const endUTC = DateTime.fromISO(end_utc, { zone: "utc" });
   
@@ -37,56 +39,55 @@ router.post("/api/calls", async (req, res) => {
     let room_id = existingRoomId || uuidv4();
     let isNewRoom = true;
 
-    // Buscar sala existente si no se proporcionó un ID
+    // Buscar sala existente por fecha
     if (!existingRoomId) {
       const existing = await db.execute(
-        `SELECT room_id FROM llamadas_mot 
+        `SELECT room_id, link FROM llamadas_mot 
          WHERE course_id = ? AND DATE(start_time) = ?`,
         [course_id, session_date]
       );
       
       if (existing.rows.length > 0) {
         room_id = existing.rows[0].room_id;
-        isNewRoom = false;
+        const link = existing.rows[0].link;
+        return res.json({
+          room_id,
+          link,
+          is_new: false,
+          utc_timestamps: { start: startUTC.toISO(), end: endUTC.toISO() }
+        });
       }
     } else {
-      // Verificar si la sala ya existe
+      // Verificar si existe por room_id
       const existing = await db.execute(
-        `SELECT room_id FROM llamadas_mot WHERE room_id = ?`,
+        `SELECT room_id, link FROM llamadas_mot WHERE room_id = ?`,
         [room_id]
       );
-      isNewRoom = existing.rows.length === 0;
+      if (existing.rows.length > 0) {
+        return res.json({
+          room_id,
+          link: existing.rows[0].link,
+          is_new: false,
+          utc_timestamps: { start: startUTC.toISO(), end: endUTC.toISO() }
+        });
+      }
     }
 
+    // Si llegamos aquí, sí creamos una nueva sala
     const token = jwt.sign({ room_id, course_id }, JWT_SECRET);
     const link = `/join?token=${token}`;
 
-    // Insertar o actualizar la sala
-    if (isNewRoom) {
-      await db.execute(
-        `INSERT INTO llamadas_mot (course_id, room_id, link, start_time, end_time)
-         VALUES (?, ?, ?, ?, ?)`,
-        [course_id, room_id, link, startUTC.toISO(), endUTC.toISO()]
-      );
-    } else {
-      await db.execute(
-        `UPDATE llamadas_mot SET 
-          start_time = ?, 
-          end_time = ?,
-          link = ?
-         WHERE room_id = ?`,
-        [startUTC.toISO(), endUTC.toISO(), link, room_id]
-      );
-    }
+    await db.execute(
+      `INSERT INTO llamadas_mot (course_id, room_id, link, start_time, end_time)
+       VALUES (?, ?, ?, ?, ?)`,
+      [course_id, room_id, link, startUTC.toISO(), endUTC.toISO()]
+    );
 
     return res.json({
       room_id,
       link,
-      is_new: isNewRoom,
-      utc_timestamps: { 
-        start: startUTC.toISO(), 
-        end: endUTC.toISO() 
-      }
+      is_new: true,
+      utc_timestamps: { start: startUTC.toISO(), end: endUTC.toISO() }
     });
 
   } catch (err) {
@@ -95,13 +96,15 @@ router.post("/api/calls", async (req, res) => {
   }
 });
 
+// ========================
+// Ingreso a la sala
+// ========================
 router.get("/join", async (req, res) => {
   const { token } = req.query;
   if (!token) {
     return res.render("inactive", { error: "Token faltante" });
   }
 
-  // Verificación del token de sala
   let payload;
   try {
     payload = jwt.verify(token, JWT_SECRET);
@@ -109,23 +112,19 @@ router.get("/join", async (req, res) => {
     return res.render("inactive", { error: "Token inválido o expirado" });
   }
 
-  // Obtener información del usuario
+  // Obtener datos de usuario
   const userJwt = req.cookies.token || req.headers.authorization?.split(" ")[1];
-  let userData = {
-    payload: null,
-    role: null,
-    name: null,
-    email: null,
-    id: null
-  };
+  let userData = { role: null, name: null, email: null, id: null };
 
   if (userJwt) {
     try {
-      userData.payload = jwt.verify(userJwt, JWT_SECRET);
-      userData.role = userData.payload.rol;
-      userData.name = userData.payload.nombre;
-      userData.email = userData.payload.email;
-      userData.id = userData.payload.id;
+      const decoded = jwt.verify(userJwt, JWT_SECRET);
+      userData = {
+        role: decoded.rol,
+        name: decoded.nombre,
+        email: decoded.email,
+        id: decoded.id,
+      };
     } catch (err) {
       console.warn("Token de usuario inválido:", err.message);
     }
@@ -143,12 +142,10 @@ router.get("/join", async (req, res) => {
       return res.render("inactive", { error: "Sala no encontrada" });
     }
 
-    // Manejo de horarios
     const nowUTC = DateTime.utc();
     const startUTC = DateTime.fromISO(room.start_time, { zone: "utc" });
     const endUTC = DateTime.fromISO(room.end_time, { zone: "utc" });
 
-    // Validación de horario
     if (nowUTC < startUTC) {
       const remaining = startUTC.diff(nowUTC, ["hours", "minutes"]).toObject();
       return res.render("inactive", {
@@ -161,14 +158,11 @@ router.get("/join", async (req, res) => {
     }
 
     // Validar acceso al curso usando la API interna
-    const MOT_API = process.env.MOT_API_URL 
+    const MOT_API = process.env.MOT_API_URL;
     try {
       const { data } = await axios.get(
         `${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`,
-        {
-          headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
-          timeout: 5000
-        }
+        { headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` }, timeout: 5000 }
       );
 
       if (!data.allowed) {
@@ -179,16 +173,12 @@ router.get("/join", async (req, res) => {
       return res.render("inactive", { error: "Error al verificar tu acceso al curso" });
     }
 
-    // Obtener módulos para profesores
     let modules = [];
     if (userData.role === "profesor") {
       try {
         const response = await axios.get(
           `http://localhost:3000/courses/${room.course_id}/modules/${userData.id}`,
-          { 
-            headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
-            timeout: 5000 
-          }
+          { headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` }, timeout: 5000 }
         );
         modules = response.data || [];
       } catch (err) {
@@ -196,12 +186,10 @@ router.get("/join", async (req, res) => {
       }
     }
 
-    // Convertir a hora local para Colombia
     const localStart = startUTC.setZone("America/Bogota");
     const localEnd = endUTC.setZone("America/Bogota");
     const localNow = nowUTC.setZone("America/Bogota");
 
-    // Preparar objeto de horarios
     const schedule = {
       start: localStart.toFormat("h:mm a"),
       end: localEnd.toFormat("h:mm a"),
