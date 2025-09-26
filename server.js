@@ -16,7 +16,8 @@ const server = http.createServer(app);
 // 🔹 Orígenes permitidos
 const allowedOrigins = [
   'https://server-mot.onrender.com',
-  'https://front-mot.onrender.com'
+  'https://front-mot.onrender.com',
+  'https://videochat-webrtc.onrender.com'
 ];
 
 // 🔹 Configuración CORS global (para creación de salas y API protegida)
