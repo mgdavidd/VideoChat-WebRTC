@@ -2,6 +2,11 @@ const express = require("express");
 const router = express.Router();
 const db = require("../db");
 const { DateTime } = require("luxon");
+const axios = require("axios");
+const jwt = require("jsonwebtoken");
+
+const VIDEOCHAT_URL = process.env.VIDEOCHAT_URL;
+const JWT_SECRET = process.env.JWT_SECRET || "clave_super_segura";
 
 router.get("/calendar-form/:roomId", async (req, res) => {
   const { roomId } = req.params;
@@ -22,7 +27,7 @@ router.get("/calendar-form/:roomId", async (req, res) => {
 });
 
 router.post("/fechas", async (req, res) => {
-  const { fechas = [], selectedDates = [], roomId = "1" } = req.body;
+  const { fechas = [], selectedDates = [], roomId = "1", selectedCourseId } = req.body;
 
   if (!Array.isArray(fechas)) {
     return res.status(400).json({ error: "Formato inválido" });
@@ -47,15 +52,75 @@ router.post("/fechas", async (req, res) => {
       }
 
       const startUTC = DateTime.fromISO(`${date}T${start}`, { zone: timeZone })
-        .toUTC()
-        .toISO();
+        .toUTC();
       const endUTC = DateTime.fromISO(`${date}T${end}`, { zone: timeZone })
-        .toUTC()
-        .toISO();
+        .toUTC();
 
-      const fechaLocal = DateTime.fromISO(startUTC, { zone: timeZone })
-        .toISODate();
+      const fechaLocal = startUTC.setZone(timeZone).toISODate();
 
+      // Verificar si ya existe la sala en la DB
+      const existingRoom = await db.execute(
+        `SELECT id as room_id, link_mot FROM rooms WHERE id = ?`,
+        [roomId]
+      );
+
+      if (existingRoom.rows.length > 0 && existingRoom.rows[0].room_id) {
+        let room_id = existingRoom.rows[0].room_id;
+        let link_mot = existingRoom.rows[0].link_mot;
+        console.log("✅ Sala existente encontrada:", { room_id, link_mot });
+
+        // 🔄 IMPORTANTE: Actualizar horarios en VideoChat aunque ya exista
+        console.log("🔄 Actualizando horarios en VideoChat para sala existente");
+        console.log("🌐 VIDEOCHAT_URL configurada:", VIDEOCHAT_URL);
+
+        if (VIDEOCHAT_URL) {
+          try {
+            const updatePayload = {
+              course_id: selectedCourseId,
+              start_utc: startUTC.toISO(),
+              end_utc: endUTC.toISO(),
+              session_date: fechaLocal,
+              room_id: room_id // ← IMPORTANTE: Pasar el room_id existente
+            };
+
+            console.log("📡 Payload actualización para VideoChat:", updatePayload);
+
+            const authToken = jwt.sign(updatePayload, JWT_SECRET);
+
+            const { data } = await axios.post(
+              `${VIDEOCHAT_URL}/api/calls`,
+              updatePayload,
+              { 
+                headers: { 
+                  Authorization: `Bearer ${authToken}`,
+                  'Content-Type': 'application/json'
+                },
+                timeout: 10000
+              }
+            );
+
+            console.log("✅ VideoChat actualizado exitosamente:", data);
+
+            // Verificar que el link no haya cambiado
+            if (data.link && data.link !== link_mot) {
+              console.log("🔄 Link actualizado:", { old: link_mot, new: data.link });
+              link_mot = data.link;
+            }
+
+          } catch (err) {
+            console.error("💥 Error actualizando en VideoChat:", {
+              message: err.message,
+              status: err.response?.status,
+              data: err.response?.data
+            });
+            // Continúa con el proceso aunque falle la actualización
+          }
+        } else {
+          console.log("⚠️ VIDEOCHAT_URL no configurada, saltando actualización");
+        }
+      }
+
+      // Guardar/actualizar fecha en DB
       await db.execute(
         `INSERT INTO fechas (
           fecha_inicial_utc, fecha_final_utc, tipo, roomId, fecha_local
@@ -64,7 +129,7 @@ router.post("/fechas", async (req, res) => {
           fecha_inicial_utc = excluded.fecha_inicial_utc,
           fecha_final_utc = excluded.fecha_final_utc,
           tipo = excluded.tipo`,
-        [startUTC, endUTC, type, roomId, fechaLocal]
+        [startUTC.toISO(), endUTC.toISO(), type, roomId, fechaLocal]
       );
     }
     res.json({ success: true });
