@@ -132,6 +132,7 @@ router.get("/join", async (req, res) => {
 
   console.log("🔍 [JOIN] Buscando token de usuario...");
   console.log("📋 [JOIN] Cookie token:", req.cookies.token ? "EXISTE" : "NO EXISTE");
+  console.log("📋 [JOIN] Cookie token simple:", req.cookies );
   console.log("📋 [JOIN] Header Authorization:", req.headers.authorization ? "EXISTE" : "NO EXISTE");
 
   if (userJwt) {
