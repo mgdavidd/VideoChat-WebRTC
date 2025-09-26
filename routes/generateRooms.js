@@ -117,7 +117,11 @@ router.get("/join", async (req, res) => {
   }
 
   // Obtener información del usuario
-  const userJwt = req.cookies.token || req.headers.authorization?.split(" ")[1];
+  const userJwt = 
+  req.cookies.mot_user_token || // la que setea el proxy
+  req.cookies.token ||          // fallback
+  req.headers.authorization?.split(" ")[1];
+
   let userData = {
     payload: null,
     role: null,
