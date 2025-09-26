@@ -15,7 +15,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
   cors: {
-    origin: [process.env.MOT_API_URL, 'https://front-mot.onrender.com/', ],
+    origin: ['http://localhost:3000', 'http://localhost:5173'],
     methods: ['GET', 'POST'],
     credentials: true
   }
@@ -63,7 +63,7 @@ app.use(routes);
 
 
 app.use(cors({
-  origin: 'process.env.MOT_API_URL',
+  origin: 'http://localhost:3000',
   credentials: true
 }));
 

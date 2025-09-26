@@ -218,7 +218,7 @@ async function exitButton() {
   }
 
   if (fromMot && userRole === 'profesor') {
-    return window.location.href = "https://front-mot.onrender.com/InstructorNav";
+    return window.location.href = "http://localhost:5173/InstructorNav";
   }
 
   document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
@@ -440,9 +440,9 @@ socket.on("force-close-room", async () => {
     alert("La videollamada ha finalizado automáticamente.");
 
     if (fromMot && userRole === 'profesor') {
-      window.location.href = "https://front-mot.onrender.com/InstructorNav";
+      window.location.href = "http://localhost:5173/InstructorNav";
     } else if (fromMot) {
-      window.location.href = "https://front-mot.onrender.com/studentsNav";
+      window.location.href = "http://localhost:5173/studentsNav";
     } else {
       window.location.href = "/rooms-form";
     }
