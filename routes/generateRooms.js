@@ -96,13 +96,16 @@ router.post("/api/calls", async (req, res) => {
 });
 
 router.get("/join", async (req, res) => {
-  const { token } = req.query;
+  const { token, user_token } = req.query;
+  
   console.log("🚀 [JOIN] Iniciando proceso de join");
-  console.log("📋 [JOIN] Token recibido:", token ? `${token.substring(0, 20)}...` : "NO TOKEN");
+  console.log("📋 [JOIN] Token de sala recibido:", token ? `${token.substring(0, 20)}...` : "NO TOKEN");
+  console.log("📋 [JOIN] Token de usuario recibido:", user_token ? `${user_token.substring(0, 20)}...` : "NO TOKEN");
+  console.log("📋 [JOIN] Query parameters completos:", req.query);
   
   if (!token) {
-    console.log("❌ [JOIN] Error: Token faltante");
-    return res.render("inactive", { error: "Token faltante" });
+    console.log("❌ [JOIN] Error: Token de sala faltante");
+    return res.render("inactive", { error: "Token de sala faltante" });
   }
 
   // Verificación del token de sala
@@ -113,14 +116,22 @@ router.get("/join", async (req, res) => {
     console.log("📋 [JOIN] Payload del token:", { room_id: payload.room_id, course_id: payload.course_id });
   } catch (err) {
     console.log("❌ [JOIN] Token de sala inválido:", err.message);
-    return res.render("inactive", { error: "Token inválido o expirado" });
+    return res.render("inactive", { error: "Token de sala inválido o expirado" });
   }
 
-  // Obtener información del usuario
+  // Obtener información del usuario - ENFOQUE MEJORADO
+  console.log("🔍 [JOIN] Buscando token de usuario...");
+  
+  // Prioridad: 1. Query parameter (user_token), 2. Cookies, 3. Headers
   const userJwt = 
-  req.cookies.mot_user_token || // la que setea el proxy
-  req.cookies.token ||          // fallback
-  req.headers.authorization?.split(" ")[1];
+    user_token || // Primero el parámetro de query (más confiable para redirects)
+    req.cookies.mot_user_token || 
+    req.cookies.token ||
+    req.headers.authorization?.split(" ")[1];
+
+  console.log("📋 [JOIN] Token de usuario final obtenido:", userJwt ? `${userJwt.substring(0, 20)}...` : "NO TOKEN");
+  console.log("📋 [JOIN] Cookies recibidas:", req.cookies);
+  console.log("📋 [JOIN] Headers authorization:", req.headers.authorization ? "EXISTE" : "NO EXISTE");
 
   let userData = {
     payload: null,
@@ -129,11 +140,6 @@ router.get("/join", async (req, res) => {
     email: null,
     id: null
   };
-
-  console.log("🔍 [JOIN] Buscando token de usuario...");
-  console.log("📋 [JOIN] Cookie token:", req.cookies.token ? "EXISTE" : "NO EXISTE");
-  console.log("📋 [JOIN] Cookie token simple:", req.cookies );
-  console.log("📋 [JOIN] Header Authorization:", req.headers.authorization ? "EXISTE" : "NO EXISTE");
 
   if (userJwt) {
     try {
@@ -151,6 +157,7 @@ router.get("/join", async (req, res) => {
       });
     } catch (err) {
       console.log("❌ [JOIN] Token de usuario inválido:", err.message);
+      // No retornamos error aquí, continuamos sin usuario autenticado
     }
   } else {
     console.log("⚠️ [JOIN] No se encontró token de usuario");
@@ -207,44 +214,54 @@ router.get("/join", async (req, res) => {
 
     console.log("✅ [JOIN] Horario válido, procediendo con validación de acceso...");
 
-    // Validar acceso al curso usando la API interna
-    const MOT_API = process.env.MOT_API_URL;
-    console.log("🔍 [JOIN] Validando acceso al curso...");
-    console.log("📋 [JOIN] MOT_API_URL:", MOT_API);
-    console.log("📋 [JOIN] User ID:", userData.id);
-    console.log("📋 [JOIN] Course ID:", room.course_id);
-    
-    if (!userData.id) {
-      console.log("❌ [JOIN] Error: Usuario no identificado para validar acceso");
-      return res.render("inactive", { error: "Debes iniciar sesión para acceder" });
-    }
-
-    try {
-      const apiUrl = `${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`;
-      console.log("📋 [JOIN] URL de validación:", apiUrl);
-      console.log("📋 [JOIN] Headers de autorización:", process.env.INTERNAL_API_KEY ? "EXISTE" : "NO EXISTE");
+    // Validar acceso al curso usando la API interna - SOLO SI HAY USUARIO AUTENTICADO
+    if (userData.id) {
+      const MOT_API = process.env.MOT_API_URL;
+      console.log("🔍 [JOIN] Validando acceso al curso...");
+      console.log("📋 [JOIN] MOT_API_URL:", MOT_API);
+      console.log("📋 [JOIN] User ID:", userData.id);
+      console.log("📋 [JOIN] Course ID:", room.course_id);
       
-      const { data } = await axios.get(apiUrl, {
-        headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
-        timeout: 5000
-      });
+      try {
+        const apiUrl = `${MOT_API}/api/validate-course-access/${userData.id}/${room.course_id}`;
+        console.log("📋 [JOIN] URL de validación:", apiUrl);
+        
+        const { data } = await axios.get(apiUrl, {
+          headers: { 
+            Authorization: `Bearer ${process.env.INTERNAL_API_KEY}`,
+            'User-Agent': 'VideoChat-Server/1.0'
+          },
+          timeout: 10000 // Aumentar timeout
+        });
 
-      console.log("📋 [JOIN] Respuesta de validación:", data);
-      
-      if (!data.allowed) {
-        console.log("❌ [JOIN] Error: Acceso no autorizado por API");
-        return res.render("inactive", { error: "No estás autorizado para ingresar" });
+        console.log("📋 [JOIN] Respuesta de validación:", data);
+        
+        if (!data.allowed) {
+          console.log("❌ [JOIN] Error: Acceso no autorizado por API");
+          return res.render("inactive", { error: "No estás autorizado para ingresar a esta sala" });
+        }
+        
+        console.log("✅ [JOIN] Acceso autorizado por API");
+      } catch (err) {
+        console.error("❌ [JOIN] Error al validar permisos:", err.message);
+        console.log("📋 [JOIN] Detalles del error:", {
+          status: err.response?.status,
+          statusText: err.response?.statusText,
+          data: err.response?.data
+        });
+        
+        // Si falla la validación pero tenemos usuario, mostramos error
+        if (userData.id) {
+          return res.render("inactive", { 
+            error: "Error al verificar tu acceso al curso. Por favor, intenta nuevamente." 
+          });
+        }
+        // Si no hay usuario, continuamos sin validación
       }
-      
-      console.log("✅ [JOIN] Acceso autorizado por API");
-    } catch (err) {
-      console.error("❌ [JOIN] Error al validar permisos:", err.message);
-      console.log("📋 [JOIN] Detalles del error:", {
-        status: err.response?.status,
-        statusText: err.response?.statusText,
-        data: err.response?.data
-      });
-      return res.render("inactive", { error: "Error al verificar tu acceso al curso" });
+    } else {
+      console.log("⚠️ [JOIN] Usuario no autenticado, omitiendo validación de acceso");
+      // Podrías decidir si permitir acceso sin autenticación o no
+      // return res.render("inactive", { error: "Debes iniciar sesión para acceder" });
     }
 
     // Obtener módulos para profesores
@@ -253,10 +270,13 @@ router.get("/join", async (req, res) => {
       console.log("🔍 [JOIN] Obteniendo módulos para profesor...");
       try {
         const response = await axios.get(
-          `https://server-mot.onrender.com/courses/${room.course_id}/modules/${userData.id}`,
+          `${process.env.MOT_API_URL}/courses/${room.course_id}/modules/${userData.id}`,
           { 
-            headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
-            timeout: 5000 
+            headers: { 
+              Authorization: `Bearer ${process.env.INTERNAL_API_KEY}`,
+              'User-Agent': 'VideoChat-Server/1.0'
+            },
+            timeout: 10000 
           }
         );
         modules = response.data || [];
