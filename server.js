@@ -19,19 +19,20 @@ const allowedOrigins = [
   'https://front-mot.onrender.com'
 ];
 
-// 🔹 Configuración CORS para Express
+// 🔹 Configuración CORS global (para creación de salas y API protegida)
 app.use(cors({
   origin: function (origin, callback) {
-    // Permite peticiones sin "origin" (ej. curl, Postman)
-    if (!origin) return callback(null, true);
-    if (allowedOrigins.includes(origin)) {
+    if (!origin || allowedOrigins.includes(origin)) {
       return callback(null, true);
-    } else {
-      return callback(new Error('No permitido por CORS: ' + origin));
     }
+    return callback(new Error('No permitido por CORS: ' + origin));
   },
   credentials: true
 }));
+
+// 🔹 Para la ruta de join, permitir desde cualquier origen
+app.use("/join", cors({ origin: "*", credentials: true }));
+
 
 // 🔹 Configuración CORS para Socket.IO
 const io = socketIo(server, {
