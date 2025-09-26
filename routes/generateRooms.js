@@ -184,7 +184,7 @@ router.get("/join", async (req, res) => {
     if (userData.role === "profesor") {
       try {
         const response = await axios.get(
-          `http://localhost:3000/courses/${room.course_id}/modules/${userData.id}`,
+          `https://server-mot.onrender.com/courses/${room.course_id}/modules/${userData.id}`,
           { 
             headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
             timeout: 5000 

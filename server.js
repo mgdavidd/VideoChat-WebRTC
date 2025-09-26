@@ -10,19 +10,40 @@ const axios = require('axios');
 const { uploadDir } = require("./uploadConfig");
 const fs = require("fs");
 
-
 const app = express();
 const server = http.createServer(app);
+
+// 🔹 Orígenes permitidos
+const allowedOrigins = [
+  'https://server-mot.onrender.com',
+  'https://front-mot.onrender.com'
+];
+
+// 🔹 Configuración CORS para Express
+app.use(cors({
+  origin: function (origin, callback) {
+    // Permite peticiones sin "origin" (ej. curl, Postman)
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    } else {
+      return callback(new Error('No permitido por CORS: ' + origin));
+    }
+  },
+  credentials: true
+}));
+
+// 🔹 Configuración CORS para Socket.IO
 const io = socketIo(server, {
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:5173'],
+    origin: allowedOrigins,
     methods: ['GET', 'POST'],
     credentials: true
   }
 });
 
 const MOT_API = process.env.MOT_API_URL || 'https://tu-dominio-mot.com/api';
-console.log(MOT_API)
+console.log("MOT_API:", MOT_API);
 
 async function verifyScheduledCall(token, jwt) {
   const res = await axios.get(`${MOT_API}/video-links/${token}`, {
@@ -48,7 +69,7 @@ process.on("SIGINT", () => {
   process.exit();
 });
 
-// Middlewares
+// 🔹 Middlewares
 app.use(cookieParser());
 app.use(express.json({ limit: '500mb' }));
 app.use(express.urlencoded({ extended: true, limit: '500mb' }));
@@ -58,20 +79,14 @@ app.use(session({
   resave: false,
   saveUninitialized: true
 }));
+
+// 🔹 Rutas
 const routes = require('./routes');
 app.use(routes);
-
-
-app.use(cors({
-  origin: 'http://localhost:3000',
-  credentials: true
-}));
 
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 
-
-// Rutas
 const restRoutes = require('./routes/generateRooms');
 app.use(restRoutes);
 
