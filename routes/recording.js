@@ -36,11 +36,22 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
   try {
     if (!req.file) throw new Error("Archivo no recibido");
 
-    const { roomId, adminUserName, fromMot, selectedModuleId } = req.body;
+    const { roomId, adminUserName, fromMot, selectedModuleId, userTimeZone } = req.body;
+
+    console.log("=== 📥 Datos recibidos en /api/upload-recording ===");
+    console.log("fromMot:", fromMot);
+    console.log("roomId:", roomId);
+    console.log("adminUserName:", adminUserName);
+    console.log("selectedModuleId:", selectedModuleId);
+    console.log("userTimeZone:", userTimeZone);
+    console.log("Archivo temporal:", req.file?.path);
+
     if (!roomId || !adminUserName) throw new Error("Datos incompletos");
 
     if (fromMot === "true") {
       const FormData = require("form-data");
+
+      console.log("⚡ Reenviando grabación a MOT API:", process.env.MOT_API_URL);
 
       await new Promise((resolve, reject) => {
         const form = new FormData();
@@ -52,25 +63,41 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
           form.append("selectedModuleId", selectedModuleId);
         }
 
+        console.log("📤 Payload enviado a MOT:");
+        form.getLength((err, length) => {
+          if (!err) {
+            console.log("Tamaño del form-data:", length, "bytes");
+          }
+        });
+        console.log("Campos enviados:", form);
+
         form.submit(`${process.env.MOT_API_URL}/api/upload-recording`, (err, motRes) => {
-          if (err) return reject(err);
+          if (err) {
+            console.error("❌ Error enviando a MOT:", err);
+            return reject(err);
+          }
 
           let body = "";
-          motRes.on("data", chunk => body += chunk);
+          motRes.on("data", chunk => (body += chunk));
           motRes.on("end", () => {
             try {
+              console.log("📥 Respuesta cruda de MOT:", body);
               const motJson = JSON.parse(body);
-              console.log("Respuesta de MOT:", motJson);
+              console.log("✅ Respuesta de MOT parseada:", motJson);
               resolve();
-              return
             } catch (e) {
+              console.error("❌ Error parseando respuesta MOT:", e.message);
               reject(new Error("Respuesta de MOT inválida"));
             }
           });
         });
       });
+
       return res.json({ success: true, message: "Grabación enviada a MOT" });
     }
+
+    // --- Caso local (Drive + DB) ---
+    console.log("⚡ Guardando grabación local en Google Drive + DB");
 
     const { auth, folderId } = await getAdminDriveClient(adminUserName);
     const drive = google.drive({ version: "v3", auth });
@@ -88,18 +115,21 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
       fields: "id,webViewLink",
     });
 
-    const { userTimeZone } = req.body;
     const nowUTC = DateTime.utc();
-
     const fechaLocal = userTimeZone
       ? nowUTC.setZone(userTimeZone).toISODate()
       : nowUTC.toISODate();
+
+    console.log("🕒 Fecha local calculada:", fechaLocal);
 
     const fechaResult = await db.execute(
       "SELECT id FROM fechas WHERE roomId = ? AND fecha_local = ?",
       [roomId, fechaLocal]
     );
+    console.log("🔍 Resultado búsqueda fecha:", fechaResult.rows);
+
     const fechaId = fechaResult.rows[0]?.id || null;
+    console.log("➡️ Usando fechaId:", fechaId);
 
     await db.execute(
       "INSERT INTO grabaciones (fecha_id, titulo, direccion, es_publico) VALUES (?, ?, ?, ?)",
@@ -111,14 +141,14 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
       ]
     );
 
-    fs.unlink(req.file.path, () => { });
+    fs.unlink(req.file.path, () => {});
     res.json({
       success: true,
       fileId: data.id,
       fileLink: data.webViewLink,
     });
   } catch (error) {
-    console.error("Error subiendo grabación:", error);
+    console.error("❌ Error subiendo grabación:", error);
 
     if (req.file?.path && fs.existsSync(req.file.path)) {
       fs.unlinkSync(req.file.path);
@@ -130,6 +160,7 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
     });
   }
 });
+
 
 router.post("/update-recording/:recordingId", async (req, res) => {
   const { recordingId } = req.params;

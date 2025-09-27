@@ -84,6 +84,7 @@ async function stopRecordingAndUpload() {
         }
 
         try {
+          console.log(formData)
           const res = await fetch("/api/upload-recording", {
             method: "POST",
             body: formData,
