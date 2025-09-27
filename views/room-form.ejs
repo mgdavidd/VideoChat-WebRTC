@@ -276,7 +276,6 @@
         }
 
         const isAdmin = <%- isAdmin %>;
-        console.log(isAdmin, <%= isAdmin%>)
         if (!isAdmin) {
           document.querySelectorAll('.admin-btn, .create-room-btn').forEach(btn => {
             btn.addEventListener('click', e => {

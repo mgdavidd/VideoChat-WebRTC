@@ -84,14 +84,12 @@ async function stopRecordingAndUpload() {
         }
 
         try {
-          console.log(formData)
           const res = await fetch("/api/upload-recording", {
             method: "POST",
             body: formData,
           });
 
           const result = await res.json();
-          console.log("Grabación subida:", result);
         } catch (err) {
           console.error("Error al subir grabación:", err);
         } finally {

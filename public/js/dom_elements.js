@@ -87,7 +87,6 @@ export function createRemoteVideoElement(userId, userName, socket, isAdmin) {
 }
 
 export function updateMediaStatus(userId, cameraStatus, microphoneStatus, screenShareStatus) {
-    console.log('estados', userId, cameraStatus, microphoneStatus, screenShareStatus)
     const remoteVideo = document.getElementById(userId)
     const cameraIcon = document.getElementById(`cameraIcon-${userId}`);
     const microphoneIcon = document.getElementById(`microphone-icon-${userId}`);
