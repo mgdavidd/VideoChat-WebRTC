@@ -73,18 +73,21 @@ router.post("/api/calls", async (req, res) => {
 
 router.get("/join", async (req, res) => {
   const { token, user_token } = req.query;
+
   if (!token) {
     return res.render("inactive", { error: "Token de sala faltante" });
   }
 
+  // Verificación del token de sala
   let payload;
   try {
     payload = jwt.verify(token, JWT_SECRET);
-  } catch {
-    return res.render("inactive", { error: "Token de sala inválido" });
+  } catch (err) {
+    return res.render("inactive", { error: "Token de sala inválido o expirado" });
   }
 
-  let userJwt =
+  // Buscar token de usuario (query > cookies > headers)
+  const userJwt =
     user_token ||
     req.cookies.mot_user_token ||
     req.cookies.token ||
@@ -94,10 +97,13 @@ router.get("/join", async (req, res) => {
   if (userJwt) {
     try {
       userData = jwt.verify(userJwt, JWT_SECRET);
-    } catch (_) {}
+    } catch (_) {
+      userData = {};
+    }
   }
 
   try {
+    // Buscar sala en DB
     const roomResult = await db.execute(
       `SELECT * FROM llamadas_mot WHERE room_id = ?`,
       [payload.room_id]
@@ -107,6 +113,7 @@ router.get("/join", async (req, res) => {
       return res.render("inactive", { error: "Sala no encontrada" });
     }
 
+    // Validar horarios
     const nowUTC = DateTime.utc();
     const startUTC = DateTime.fromISO(room.start_time, { zone: "utc" });
     const endUTC = DateTime.fromISO(room.end_time, { zone: "utc" });
@@ -118,20 +125,49 @@ router.get("/join", async (req, res) => {
       return res.render("inactive", { error: "La sesión ha finalizado" });
     }
 
-    // Validación de acceso al curso solo si hay usuario
+    // Validar acceso a curso si hay usuario
     if (userData.id) {
       try {
-        const { data } = await axios.get(
-          `${process.env.MOT_API_URL}/api/validate-course-access/${userData.id}/${room.course_id}`,
-          { headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` }, timeout: 10000 }
-        );
+        const apiUrl = `${process.env.MOT_API_URL}/api/validate-course-access/${userData.id}/${room.course_id}`;
+        const { data } = await axios.get(apiUrl, {
+          headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
+          timeout: 10000,
+        });
         if (!data.allowed) {
-          return res.render("inactive", { error: "No autorizado para esta sala" });
+          return res.render("inactive", { error: "No estás autorizado para esta sala" });
         }
-      } catch (_) {
+      } catch {
         return res.render("inactive", { error: "Error verificando acceso al curso" });
       }
     }
+
+    // 🔹 Obtener módulos SOLO si es profesor
+    let modules = [];
+    if (userData.rol === "profesor") {
+      try {
+        const response = await axios.get(
+          `${process.env.MOT_API_URL}/courses/${room.course_id}/modules/${userData.id}`,
+          {
+            headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
+            timeout: 10000,
+          }
+        );
+        modules = response.data || [];
+      } catch (err) {
+        console.error("Error obteniendo módulos:", err.message);
+      }
+    }
+
+    // Convertir a horario local (ejemplo Bogotá)
+    const localStart = startUTC.setZone("America/Bogota");
+    const localEnd = endUTC.setZone("America/Bogota");
+    const localNow = nowUTC.setZone("America/Bogota");
+
+    const schedule = {
+      start: localStart.toFormat("h:mm a"),
+      end: localEnd.toFormat("h:mm a"),
+      date: localStart.toFormat("d 'de' LLLL 'de' y"),
+    };
 
     return res.render("room", {
       roomId: payload.room_id,
@@ -139,14 +175,17 @@ router.get("/join", async (req, res) => {
       userRole: userData.rol,
       isAdmin: userData.rol === "profesor",
       userName: userData.nombre || userData.email || "Usuario",
-      listModulesCourse: [],
-      schedule: {},
-      currentTime: DateTime.utc().toISO(),
+      listModulesCourse: modules,
+      schedule,
+      currentTime: localNow.toFormat("d 'de' LLLL 'de' y 'a las' h:mm a"),
     });
   } catch (err) {
     console.error("Error crítico en /join:", err);
-    return res.render("inactive", { error: "Error interno del servidor" });
+    return res.render("inactive", {
+      error: "Error interno del servidor. Por favor intente nuevamente.",
+    });
   }
 });
+
 
 module.exports = router;
