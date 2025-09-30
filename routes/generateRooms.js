@@ -8,24 +8,33 @@ const axios = require("axios");
 
 const JWT_SECRET = process.env.JWT_SECRET || "clave_super_segura";
 
+// 🔹 Nueva versión: acepta múltiples sesiones en un solo request
 router.post("/api/calls", async (req, res) => {
-  const { course_id, session_date, start_utc, end_utc, room_id: existingRoomId } = req.body;
+  const { course_id, sessions = [] } = req.body;
 
-  if (!start_utc || !end_utc) {
-    return res.status(400).json({ error: "Faltan campos requeridos" });
-  }
-
-  const startUTC = DateTime.fromISO(start_utc, { zone: "utc" });
-  const endUTC = DateTime.fromISO(end_utc, { zone: "utc" });
-  if (!startUTC.isValid || !endUTC.isValid || endUTC <= startUTC) {
-    return res.status(400).json({ error: "Rango de horas inválido" });
+  if (!course_id || !Array.isArray(sessions) || sessions.length === 0) {
+    return res.status(400).json({ error: "Faltan datos requeridos" });
   }
 
   try {
-    let room_id = existingRoomId || uuidv4();
-    let isNewRoom = true;
+    const results = [];
 
-    if (!existingRoomId) {
+    for (const s of sessions) {
+      const { inicio, final, titulo = "Clase", type = "Clase en vivo", timezone = "America/Bogota" } = s;
+
+      const startUTC = DateTime.fromISO(inicio, { zone: timezone }).toUTC();
+      const endUTC = DateTime.fromISO(final, { zone: timezone }).toUTC();
+      if (!startUTC.isValid || !endUTC.isValid || endUTC <= startUTC) {
+        results.push({ ...s, status: "failed", reason: "Rango inválido" });
+        continue;
+      }
+
+      const session_date = DateTime.fromISO(inicio, { zone: timezone }).toISODate();
+
+      // Buscar sala existente
+      let room_id = s.room_id || uuidv4();
+      let isNewRoom = true;
+
       const existing = await db.execute(
         `SELECT room_id FROM llamadas_mot 
          WHERE course_id = ? AND DATE(start_time) = ?`,
@@ -35,42 +44,44 @@ router.post("/api/calls", async (req, res) => {
         room_id = existing.rows[0].room_id;
         isNewRoom = false;
       }
-    } else {
-      const existing = await db.execute(
-        `SELECT room_id FROM llamadas_mot WHERE room_id = ?`,
-        [room_id]
-      );
-      isNewRoom = existing.rows.length === 0;
+
+      const token = jwt.sign({ room_id, course_id }, JWT_SECRET);
+      const link = `/join?token=${token}`;
+
+      if (isNewRoom) {
+        await db.execute(
+          `INSERT INTO llamadas_mot (course_id, room_id, link, start_time, end_time)
+           VALUES (?, ?, ?, ?, ?)`,
+          [course_id, room_id, link, startUTC.toISO(), endUTC.toISO()]
+        );
+      } else {
+        await db.execute(
+          `UPDATE llamadas_mot SET start_time = ?, end_time = ?, link = ? WHERE room_id = ?`,
+          [startUTC.toISO(), endUTC.toISO(), link, room_id]
+        );
+      }
+
+      results.push({
+        inicio,
+        final,
+        titulo,
+        type,
+        timezone,
+        room_id,
+        link,
+        status: "success",
+        action: isNewRoom ? "created" : "updated",
+      });
     }
 
-    const token = jwt.sign({ room_id, course_id }, JWT_SECRET);
-    const link = `/join?token=${token}`;
-
-    if (isNewRoom) {
-      await db.execute(
-        `INSERT INTO llamadas_mot (course_id, room_id, link, start_time, end_time)
-         VALUES (?, ?, ?, ?, ?)`,
-        [course_id, room_id, link, startUTC.toISO(), endUTC.toISO()]
-      );
-    } else {
-      await db.execute(
-        `UPDATE llamadas_mot SET start_time = ?, end_time = ?, link = ? WHERE room_id = ?`,
-        [startUTC.toISO(), endUTC.toISO(), link, room_id]
-      );
-    }
-
-    return res.json({
-      room_id,
-      link,
-      is_new: isNewRoom,
-      utc_timestamps: { start: startUTC.toISO(), end: endUTC.toISO() },
-    });
+    return res.json({ results });
   } catch (err) {
     console.error("Error crítico en /api/calls:", err);
-    return res.status(500).json({ error: "Error al procesar la sala" });
+    return res.status(500).json({ error: "Error al procesar las salas" });
   }
 });
 
+// (la ruta /join se mantiene igual que en tu código original)
 router.get("/join", async (req, res) => {
   const { token, user_token } = req.query;
 
@@ -78,7 +89,6 @@ router.get("/join", async (req, res) => {
     return res.render("inactive", { error: "Token de sala faltante" });
   }
 
-  // Verificación del token de sala
   let payload;
   try {
     payload = jwt.verify(token, JWT_SECRET);
@@ -86,7 +96,6 @@ router.get("/join", async (req, res) => {
     return res.render("inactive", { error: "Token de sala inválido o expirado" });
   }
 
-  // Buscar token de usuario (query > cookies > headers)
   const userJwt =
     user_token ||
     req.cookies.mot_user_token ||
@@ -103,7 +112,6 @@ router.get("/join", async (req, res) => {
   }
 
   try {
-    // Buscar sala en DB
     const roomResult = await db.execute(
       `SELECT * FROM llamadas_mot WHERE room_id = ?`,
       [payload.room_id]
@@ -113,7 +121,6 @@ router.get("/join", async (req, res) => {
       return res.render("inactive", { error: "Sala no encontrada" });
     }
 
-    // Validar horarios
     const nowUTC = DateTime.utc();
     const startUTC = DateTime.fromISO(room.start_time, { zone: "utc" });
     const endUTC = DateTime.fromISO(room.end_time, { zone: "utc" });
@@ -125,7 +132,6 @@ router.get("/join", async (req, res) => {
       return res.render("inactive", { error: "La sesión ha finalizado" });
     }
 
-    // Validar acceso a curso si hay usuario
     if (userData.id) {
       try {
         const apiUrl = `${process.env.MOT_API_URL}/api/validate-course-access/${userData.id}/${room.course_id}`;
@@ -141,7 +147,6 @@ router.get("/join", async (req, res) => {
       }
     }
 
-    // 🔹 Obtener módulos SOLO si es profesor
     let modules = [];
     if (userData.rol === "profesor") {
       try {
@@ -158,7 +163,6 @@ router.get("/join", async (req, res) => {
       }
     }
 
-    // Convertir a horario local (ejemplo Bogotá)
     const localStart = startUTC.setZone("America/Bogota");
     const localEnd = endUTC.setZone("America/Bogota");
     const localNow = nowUTC.setZone("America/Bogota");
@@ -186,6 +190,5 @@ router.get("/join", async (req, res) => {
     });
   }
 });
-
 
 module.exports = router;
