@@ -8,7 +8,11 @@ const axios = require("axios");
 
 const JWT_SECRET = process.env.JWT_SECRET || "clave_super_segura";
 
-// 🔹 Nueva versión: acepta múltiples sesiones en un solo request
+/**
+ * POST /api/calls
+ * - Ahora optimizado para recibir múltiples sesiones en un solo request.
+ * - Hacemos una sola consulta a DB para saber si ya existen salas en las fechas solicitadas.
+ */
 router.post("/api/calls", async (req, res) => {
   const { course_id, sessions = [] } = req.body;
 
@@ -19,31 +23,42 @@ router.post("/api/calls", async (req, res) => {
   try {
     const results = [];
 
+    // Calcula las fechas únicas (local) que se van a procesar
+    const sessionDates = [];
     for (const s of sessions) {
-      const { inicio, final, titulo = "Clase", type = "Clase en vivo", timezone = "America/Bogota" } = s;
+      const tz = s.timezone || "America/Bogota";
+      const localDate = DateTime.fromISO(s.inicio, { zone: tz }).toISODate();
+      sessionDates.push(localDate);
+    }
+    const distinctDates = [...new Set(sessionDates)];
 
-      const startUTC = DateTime.fromISO(inicio, { zone: timezone }).toUTC();
-      const endUTC = DateTime.fromISO(final, { zone: timezone }).toUTC();
+    // Consulta única: obtener llamadas_mot existentes para esas fechas y course_id
+    const placeholders = distinctDates.map(() => "?").join(",");
+    const existingRows = await db.execute(
+      `SELECT room_id, DATE(start_time) as session_date FROM llamadas_mot WHERE course_id = ? AND DATE(start_time) IN (${placeholders})`,
+      [course_id, ...distinctDates]
+    );
+
+    const existingMap = new Map();
+    for (const row of existingRows.rows) {
+      existingMap.set(row.session_date, row.room_id);
+    }
+
+    // Procesamiento en lote: cada session se crea/actualiza según exista room o no.
+    for (const s of sessions) {
+      const tz = s.timezone || "America/Bogota";
+      const startUTC = DateTime.fromISO(s.inicio, { zone: tz }).toUTC();
+      const endUTC = DateTime.fromISO(s.final, { zone: tz }).toUTC();
       if (!startUTC.isValid || !endUTC.isValid || endUTC <= startUTC) {
         results.push({ ...s, status: "failed", reason: "Rango inválido" });
         continue;
       }
 
-      const session_date = DateTime.fromISO(inicio, { zone: timezone }).toISODate();
+      const session_date = DateTime.fromISO(s.inicio, { zone: tz }).toISODate();
 
-      // Buscar sala existente
-      let room_id = s.room_id || uuidv4();
-      let isNewRoom = true;
-
-      const existing = await db.execute(
-        `SELECT room_id FROM llamadas_mot 
-         WHERE course_id = ? AND DATE(start_time) = ?`,
-        [course_id, session_date]
-      );
-      if (existing.rows.length > 0) {
-        room_id = existing.rows[0].room_id;
-        isNewRoom = false;
-      }
+      // Reusar si ya existe
+      let room_id = s.room_id || existingMap.get(session_date) || uuidv4();
+      let isNewRoom = !existingMap.has(session_date) && !s.room_id;
 
       const token = jwt.sign({ room_id, course_id }, JWT_SECRET);
       const link = `/join?token=${token}`;
@@ -54,7 +69,10 @@ router.post("/api/calls", async (req, res) => {
            VALUES (?, ?, ?, ?, ?)`,
           [course_id, room_id, link, startUTC.toISO(), endUTC.toISO()]
         );
+        // registrar para evitar duplicados si hay varias sessions con la misma fecha en este batch
+        existingMap.set(session_date, room_id);
       } else {
+        // Si ya existe, actualizamos (puede ser que cambien horas)
         await db.execute(
           `UPDATE llamadas_mot SET start_time = ?, end_time = ?, link = ? WHERE room_id = ?`,
           [startUTC.toISO(), endUTC.toISO(), link, room_id]
@@ -62,11 +80,11 @@ router.post("/api/calls", async (req, res) => {
       }
 
       results.push({
-        inicio,
-        final,
-        titulo,
-        type,
-        timezone,
+        inicio: s.inicio,
+        final: s.final,
+        titulo: s.titulo || "Clase",
+        type: s.type || "Clase en vivo",
+        timezone: tz,
         room_id,
         link,
         status: "success",
@@ -81,7 +99,7 @@ router.post("/api/calls", async (req, res) => {
   }
 });
 
-// (la ruta /join se mantiene igual que en tu código original)
+// /join (igual funcionalmente; mantengo la lógica)
 router.get("/join", async (req, res) => {
   const { token, user_token } = req.query;
 
