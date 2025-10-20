@@ -11,6 +11,8 @@ const oAuth2Client = new OAuth2Client(
 );
 
 router.get("/", (req, res) => res.render("login"));
+router.get("/login", (req, res) => res.render("login"));
+
 
 router.post("/login", async (req, res) => {
   const { userName, password } = req.body;
