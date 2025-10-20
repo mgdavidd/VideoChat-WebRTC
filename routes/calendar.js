@@ -7,6 +7,9 @@ router.get("/calendar-form/:roomId", async (req, res) => {
   const { roomId } = req.params;
   const { userName } = req.cookies;
 
+  if (!userName || userName.trim() === "") return res.redirect("/login");
+  if (!roomId) return res.redirect("/rooms-form");
+
   const result = await db.execute("SELECT 1 FROM rooms WHERE id = ?", [roomId]);
   const owner = await db.execute(
     "SELECT 1 FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ? AND r.id = ?",

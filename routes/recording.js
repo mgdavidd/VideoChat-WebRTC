@@ -9,6 +9,9 @@ const { google } = require("googleapis");
 
 router.get("/my-recordings", async (req, res) => {
   const { userName } = req.cookies;
+  
+  if (!userName || userName.trim() === "") return res.redirect("/login");
+
   try {
     const result = await db.execute(
       `SELECT g.id, g.fecha_id, g.titulo, g.direccion, g.es_publico, 
@@ -37,7 +40,7 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
     if (!req.file) throw new Error("Archivo no recibido");
 
     const { roomId, adminUserName, fromMot, selectedModuleId, userTimeZone } = req.body;
-    if (!roomId || !adminUserName) throw new Error("Datos incompletos");
+    if (!roomId || !adminUserName || adminUserName.trim() === "") throw new Error("Datos incompletos");
 
     // Caso: grabación enviada desde MOT
     if (fromMot === "true") {
@@ -60,7 +63,7 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
           motRes.on("data", chunk => (body += chunk));
           motRes.on("end", () => {
             try {
-              JSON.parse(body); // validación rápida
+              JSON.parse(body);
               resolve();
             } catch {
               reject(new Error("Respuesta de MOT inválida"));
@@ -72,7 +75,6 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
       return res.json({ success: true, message: "Grabación enviada a MOT" });
     }
 
-    // Caso: grabación local → Google Drive + DB
     const { auth, folderId } = await getAdminDriveClient(adminUserName);
     const drive = google.drive({ version: "v3", auth });
 
