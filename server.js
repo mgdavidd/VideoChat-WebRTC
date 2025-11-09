@@ -17,7 +17,7 @@ const server = http.createServer(app);
 const allowedOrigins = [
   'https://server-mot.onrender.com',
   'https://front-mot.onrender.com',
-  'https://videochat-webrtc.onrender.com'
+  'https://video-chat-web-rtc-sigma.vercel.app'
 ];
 
 // 🔹 Configuración CORS global (para creación de salas y API protegida)
@@ -44,7 +44,7 @@ const io = socketIo(server, {
   }
 });
 
-const MOT_API = process.env.MOT_API_URL || 'https://tu-dominio-mot.com/api';
+const MOT_API = process.env.MOT_API_URL
 
 async function verifyScheduledCall(token, jwt) {
   const res = await axios.get(`${MOT_API}/video-links/${token}`, {
