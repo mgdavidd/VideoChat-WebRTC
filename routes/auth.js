@@ -70,8 +70,7 @@ router.get("/auth/google", (req, res) => {
       "https://www.googleapis.com/auth/drive.metadata",
       "https://www.googleapis.com/auth/userinfo.email",
       "https://www.googleapis.com/auth/userinfo.profile",
-    ],
-    prompt: "consent",
+    ]
   });
   res.redirect(authUrl);
 });
