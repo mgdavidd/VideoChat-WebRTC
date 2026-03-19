@@ -9,9 +9,6 @@ const { google } = require("googleapis");
 
 router.get("/my-recordings", async (req, res) => {
   const { userName } = req.cookies;
-  
-  if (!userName || userName.trim() === "") return res.redirect("/login");
-
   try {
     const result = await db.execute(
       `SELECT g.id, g.fecha_id, g.titulo, g.direccion, g.es_publico, 
@@ -39,10 +36,12 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
   try {
     if (!req.file) throw new Error("Archivo no recibido");
 
-    const { roomId, adminUserName, fromMot, selectedModuleId, userTimeZone } = req.body;
-    if (!roomId || !adminUserName || adminUserName.trim() === "") throw new Error("Datos incompletos");
+    const { roomId, adminUserName, fromMot } = req.body;
+    if (!roomId || !adminUserName) throw new Error("Datos incompletos");
 
-    // Caso: grabación enviada desde MOT
+    let folderId = null;
+
+    // Enviar grabación al servidor MOT si viene de otra instancia
     if (fromMot === "true") {
       const FormData = require("form-data");
 
@@ -52,30 +51,29 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
         form.append("roomId", roomId);
         form.append("adminUserName", adminUserName);
 
-        if (selectedModuleId) {
-          form.append("selectedModuleId", selectedModuleId);
-        }
-
         form.submit(`${process.env.MOT_API_URL}/api/upload-recording`, (err, motRes) => {
           if (err) return reject(err);
 
           let body = "";
-          motRes.on("data", chunk => (body += chunk));
+          motRes.on("data", chunk => body += chunk);
           motRes.on("end", () => {
             try {
-              JSON.parse(body);
+              const motJson = JSON.parse(body);
+              console.log("Respuesta de MOT:", motJson);
               resolve();
-            } catch {
+              return
+            } catch (e) {
               reject(new Error("Respuesta de MOT inválida"));
             }
           });
         });
       });
-
+      // Si viene de MOT, no subimos al Drive del admin
       return res.json({ success: true, message: "Grabación enviada a MOT" });
     }
 
-    const { auth, folderId } = await getAdminDriveClient(adminUserName);
+    // Subir al Drive del admin
+    const { auth } = await getAdminDriveClient(adminUserName, folderId);
     const drive = google.drive({ version: "v3", auth });
 
     const { data } = await drive.files.create({
@@ -91,10 +89,9 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
       fields: "id,webViewLink",
     });
 
-    const nowUTC = DateTime.utc();
-    const fechaLocal = userTimeZone
-      ? nowUTC.setZone(userTimeZone).toISODate()
-      : nowUTC.toISODate();
+    // Obtener id de la fecha para insertar la grabación
+    const now = DateTime.utc();
+    const fechaLocal = now.toISODate();
 
     const fechaResult = await db.execute(
       "SELECT id FROM fechas WHERE roomId = ? AND fecha_local = ?",
@@ -106,7 +103,7 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
       "INSERT INTO grabaciones (fecha_id, titulo, direccion, es_publico) VALUES (?, ?, ?, ?)",
       [
         fechaId,
-        `Grabacion-${roomId}-${nowUTC.toFormat("yyyyLLdd-HHmmss")}`,
+        `Grabacion-${roomId}-${now.toFormat("yyyyLLdd-HHmmss")}`,
         data.webViewLink,
         0,
       ]

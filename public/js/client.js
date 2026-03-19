@@ -18,10 +18,7 @@ const pendingOffers = [];
 let localStream = null;
 let camera = true;
 
-// 🔥 NUEVO: Estado para controlar la subida y bloqueo de salida
-let isUploading = false;
-let isExiting = false;
-
+// Evento para el usuario nuevo (solo crea conexiones y envía offer)
 socket.on("users-in-room", (usersArray) => {
   usersArray.forEach(({ userId, userName }) => {
     users[userId] = userName;
@@ -29,6 +26,7 @@ socket.on("users-in-room", (usersArray) => {
   });
 });
 
+// Evento para los usuarios viejos (NO crean conexión aquí, solo esperan offer)
 socket.on("new-user", ({ userId, roomId: remoteRoomId, userName }) => {
   users[userId] = userName;
 });
@@ -64,137 +62,31 @@ function updateLocalStream(newStream) {
   });
 }
 
-// 🔥 MEJORADO: Deshabilitar botón durante la subida
-function disableExitButton() {
-  const exitBtn = document.getElementById("exitBtn");
-  if (exitBtn) {
-    exitBtn.disabled = true;
-    exitBtn.style.opacity = "0.5";
-    exitBtn.style.cursor = "not-allowed";
-    exitBtn.title = "Guardando grabación, por favor espera...";
-  }
-}
-
-function enableExitButton() {
-  const exitBtn = document.getElementById("exitBtn");
-  if (exitBtn) {
-    exitBtn.disabled = false;
-    exitBtn.style.opacity = "1";
-    exitBtn.style.cursor = "pointer";
-    exitBtn.title = "Salir de la videollamada";
-  }
-}
-
-// 🔥 MEJORADO: Mostrar indicador de progreso
-function showUploadProgress() {
-  let progressDiv = document.getElementById("upload-progress");
-  if (!progressDiv) {
-    progressDiv = document.createElement("div");
-    progressDiv.id = "upload-progress";
-    progressDiv.style.cssText = `
-      position: fixed;
-      top: 20px;
-      right: 20px;
-      background: rgba(0, 0, 0, 0.9);
-      color: white;
-      padding: 15px 25px;
-      border-radius: 8px;
-      z-index: 10000;
-      font-family: Arial, sans-serif;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-    `;
-    document.body.appendChild(progressDiv);
-  }
-  progressDiv.innerHTML = `
-    <div style="display: flex; align-items: center; gap: 10px;">
-      <div style="
-        border: 3px solid #f3f3f3;
-        border-top: 3px solid #3498db;
-        border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        animation: spin 1s linear infinite;
-      "></div>
-      <span>Guardando grabación...</span>
-    </div>
-    <style>
-      @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-      }
-    </style>
-  `;
-  progressDiv.style.display = "block";
-}
-
-function hideUploadProgress() {
-  const progressDiv = document.getElementById("upload-progress");
-  if (progressDiv) {
-    progressDiv.style.display = "none";
-  }
-}
-
-async function stopRecordingAndUpload() {
-  return new Promise((resolve, reject) => {
-    // Evitar múltiples llamadas simultáneas
-    if (isUploading) {
-      console.log("Ya hay una subida en progreso");
-      return resolve();
-    }
-
+function stopRecordingAndUpload() {
+  return new Promise((resolve) => {
     if (mediaRecorder && mediaRecorder.state !== "inactive") {
-      isUploading = true;
-      disableExitButton();
-      showUploadProgress();
-
       mediaRecorder.onstop = async function () {
+        const blob = new Blob(recordedChunks, { type: "video/webm" });
+        const formData = new FormData();
+        formData.append("recording", blob, "grabacion.webm");
+        formData.append("roomId", roomId);
+        formData.append("adminUserName", userNameLocal);
+        formData.append("fromMot", fromMot ? "true" : "false");
+
+
         try {
-          const blob = new Blob(recordedChunks, { type: "video/webm" });
-          const formData = new FormData();
-          formData.append("recording", blob, "grabacion.webm");
-          formData.append("roomId", roomId);
-          formData.append("adminUserName", userNameLocal);
-          formData.append("fromMot", fromMot ? "true" : "false");
-
-          const userTimeZone = luxon.DateTime.local().zoneName;
-          formData.append("userTimeZone", userTimeZone);
-
-          if (window.selectedModuleId) {
-            formData.append("selectedModuleId", window.selectedModuleId);
-          }
-
-          console.log("Iniciando subida de grabación...");
           const res = await fetch("/api/upload-recording", {
             method: "POST",
             body: formData,
           });
 
           const result = await res.json();
-          
-          if (result.success) {
-            console.log("✅ Grabación subida exitosamente");
-          } else {
-            console.error("❌ Error en respuesta del servidor:", result);
-          }
-
-          resolve();
+          console.log("Resultado de subida:", result);
         } catch (err) {
-          console.error("❌ Error al subir grabación:", err);
-          reject(err);
-        } finally {
-          isUploading = false;
-          hideUploadProgress();
-          enableExitButton();
-          recordedChunks = []; // Limpiar chunks
+          console.error("Error al subir grabación:", err);
         }
-      };
 
-      mediaRecorder.onerror = function(error) {
-        console.error("Error en MediaRecorder:", error);
-        isUploading = false;
-        hideUploadProgress();
-        enableExitButton();
-        reject(error);
+        resolve();
       };
 
       mediaRecorder.stop();
@@ -203,6 +95,7 @@ async function stopRecordingAndUpload() {
     }
   });
 }
+
 
 async function changeMedia() {
   const buttonMedia = document.getElementById("buttonScreen");
@@ -301,52 +194,25 @@ function toggleAudio() {
   }
 }
 
-// 🔥 MEJORADO: Prevenir salida múltiple y asegurar subida
 async function exitButton() {
-  // Prevenir múltiples clics
-  if (isExiting) {
-    console.log("Ya se está procesando la salida");
-    return;
+  if (isAdmin) {
+    await stopRecordingAndUpload();
   }
 
-  // Prevenir salida durante subida
-  if (isUploading) {
-    alert("Por favor espera a que termine de guardarse la grabación");
-    return;
+  Object.values(peerConnections).forEach((pc) => pc.close());
+  peerConnections = {};
+
+  if (localStream) {
+    localStream.getTracks().forEach((track) => track.stop());
+    localStream = null;
   }
 
-  isExiting = true;
-  disableExitButton();
-
-  try {
-    // Si es admin, esperar a que termine la subida
-    if (isAdmin) {
-      await stopRecordingAndUpload();
-    }
-
-    // Cerrar conexiones
-    Object.values(peerConnections).forEach((pc) => pc.close());
-    peerConnections = {};
-
-    // Detener stream local
-    if (localStream) {
-      localStream.getTracks().forEach((track) => track.stop());
-      localStream = null;
-    }
-
-    // Redirigir según el tipo de usuario
-    if (fromMot && userRole === 'profesor') {
-      return window.location.href = "https://front-mot.onrender.com/InstructorNav";
-    }
-
-    document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    window.location.href = "/";
-  } catch (error) {
-    console.error("Error durante la salida:", error);
-    alert("Hubo un problema al guardar la grabación. Reintentando...");
-    isExiting = false;
-    enableExitButton();
+  if(fromMot && userRole === 'profesor') {
+    return window.location.href = "http://localhost:5173/InstructorNav";
   }
+
+  document.cookie = "userName=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+  window.location.href = "/";
 }
 
 function createPeerConnection(userId, userName) {
@@ -442,7 +308,7 @@ async function start() {
       // 1. Capturar pantalla (con o sin audio)
       const screenStream = await navigator.mediaDevices.getDisplayMedia({
         video: true,
-        audio: true
+        audio: true // Pedir audio pero puede ser rechazado
       });
 
       // 2. Intentar capturar micrófono
@@ -458,15 +324,19 @@ async function start() {
       // 3. Determinar qué streams usar para la grabación
       let recordingStream;
       if (screenStream.getAudioTracks().length > 0 && micStream) {
+        // Mezclar ambos audios si ambos existen
         const mixedAudio = await mixAudioStreams(screenStream, micStream);
         const videoTrack = screenStream.getVideoTracks()[0];
         recordingStream = new MediaStream([videoTrack, ...mixedAudio.getAudioTracks()]);
       } else if (screenStream.getAudioTracks().length > 0) {
+        // Usar solo audio de pantalla si existe
         recordingStream = screenStream;
       } else if (micStream) {
+        // Usar solo micrófono si existe (con video de pantalla)
         const videoTrack = screenStream.getVideoTracks()[0];
         recordingStream = new MediaStream([videoTrack, ...micStream.getAudioTracks()]);
       } else {
+        // Solo video si no hay audio
         recordingStream = new MediaStream([screenStream.getVideoTracks()[0]]);
       }
 
@@ -490,6 +360,7 @@ async function start() {
       };
 
       mediaRecorder.start();
+      console.log("Grabación iniciada por admin");
     } catch (err) {
       console.error("Error al iniciar grabación:", err);
       if (err.name !== 'NotAllowedError') {
@@ -501,6 +372,7 @@ async function start() {
   await changeMedia();
   socket.emit("join-room", { roomId, userName: userNameLocal });
 }
+
 
 start();
 
@@ -550,40 +422,15 @@ socket.on("kicked", () => {
   window.location.href = "/";
 });
 
-// 🔥 MEJORADO: Deshabilitar botón durante cierre automático
 socket.on("force-close-room", async () => {
-  disableExitButton();
-  
   if (isAdmin && mediaRecorder && mediaRecorder.state !== "inactive") {
-    try {
-      await stopRecordingAndUpload();
-      console.log("✅ Grabación guardada antes del cierre automático");
-    } catch (error) {
-      console.error("❌ Error guardando grabación:", error);
-    }
+    await stopRecordingAndUpload();
   }
-
-  setTimeout(() => {
-    alert("La videollamada ha finalizado automáticamente.");
-
-    if (fromMot && userRole === 'profesor') {
-      window.location.href = "https://front-mot.onrender.com/InstructorNav";
-    } else if (fromMot) {
-      window.location.href = "https://front-mot.onrender.com/studentNav";
-    } else {
-      window.location.href = "/rooms-form";
-    }
-  }, 2000); // Reducido de 5000 a 2000ms
+  alert("La videollamada ha finalizado.");
+  window.location.href = "/rooms-form";
 });
 
-// 🔥 MEJORADO: Prevenir cierre de ventana durante subida
 window.addEventListener("beforeunload", (e) => {
-  if (isUploading) {
-    e.preventDefault();
-    e.returnValue = "La grabación se está guardando. ¿Estás seguro de salir?";
-    return e.returnValue;
-  }
-  
   if (isAdmin && mediaRecorder && mediaRecorder.state !== "inactive") {
     stopRecordingAndUpload();
   }

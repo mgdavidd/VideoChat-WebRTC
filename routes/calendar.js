@@ -7,9 +7,6 @@ router.get("/calendar-form/:roomId", async (req, res) => {
   const { roomId } = req.params;
   const { userName } = req.cookies;
 
-  if (!userName || userName.trim() === "") return res.redirect("/login");
-  if (!roomId) return res.redirect("/rooms-form");
-
   const result = await db.execute("SELECT 1 FROM rooms WHERE id = ?", [roomId]);
   const owner = await db.execute(
     "SELECT 1 FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ? AND r.id = ?",
@@ -20,7 +17,7 @@ router.get("/calendar-form/:roomId", async (req, res) => {
   if (result.rows.length > 0) {
     return res.render("calendar", { roomId, isOwner });
   } else {
-    return res.status(404).render("error-calendar", { message: "La sala no existe" });
+    return res.status(404).render("error-calendar", {message: "La sala no existe"});
   }
 });
 
@@ -36,8 +33,8 @@ router.post("/fechas", async (req, res) => {
       await db.execute(
         `DELETE FROM fechas 
          WHERE roomId = ? AND fecha_local NOT IN (${selectedDates
-          .map(() => "?")
-          .join(",")})`,
+           .map(() => "?")
+           .join(",")})`,
         [roomId, ...selectedDates]
       );
     }
@@ -56,9 +53,6 @@ router.post("/fechas", async (req, res) => {
         .toUTC()
         .toISO();
 
-      const fechaLocal = DateTime.fromISO(startUTC, { zone: timeZone })
-        .toISODate();
-
       await db.execute(
         `INSERT INTO fechas (
           fecha_inicial_utc, fecha_final_utc, tipo, roomId, fecha_local
@@ -67,7 +61,7 @@ router.post("/fechas", async (req, res) => {
           fecha_inicial_utc = excluded.fecha_inicial_utc,
           fecha_final_utc = excluded.fecha_final_utc,
           tipo = excluded.tipo`,
-        [startUTC, endUTC, type, roomId, fechaLocal]
+        [startUTC, endUTC, type, roomId, date]
       );
     }
     res.json({ success: true });

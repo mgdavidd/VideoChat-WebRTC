@@ -4,210 +4,131 @@ const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const db = require("../db");
 const { DateTime } = require("luxon");
-const axios = require("axios");
 
 const JWT_SECRET = process.env.JWT_SECRET || "clave_super_segura";
 
-// ================================
-// 📌 Crear/actualizar múltiples salas
-// ================================
 router.post("/api/calls", async (req, res) => {
-  const { course_id, sessions = [] } = req.body;
-
-  if (!course_id || !Array.isArray(sessions) || sessions.length === 0) {
-    return res.status(400).json({ error: "Faltan datos requeridos" });
-  }
-
   try {
-    const results = [];
+    const { course_id, session_date, start_time, end_time, title } = req.body;
 
-    for (const s of sessions) {
-      const { 
-        inicio, 
-        final, 
-        titulo = "Clase", 
-        type = "Clase en vivo", 
-        timezone = "America/Bogota" 
-      } = s;
+    const startUTC = DateTime.fromISO(`${session_date}T${start_time}`, { zone: "utc" }).toISO();
+    const endUTC = DateTime.fromISO(`${session_date}T${end_time}`, { zone: "utc" }).toISO();
 
-      const startUTC = DateTime.fromISO(inicio, { zone: timezone }).toUTC();
-      const endUTC = DateTime.fromISO(final, { zone: timezone }).toUTC();
+    const existing = await db.execute(
+      `SELECT * FROM llamadas_mot WHERE course_id = ? AND DATE(start_time) = ?`,
+      [course_id, session_date]
+    );
 
-      if (!startUTC.isValid || !endUTC.isValid || endUTC <= startUTC) {
-        results.push({ ...s, status: "failed", reason: "Rango inválido" });
-        continue;
-      }
+    if (existing.rows.length > 0) {
+      const room_id = existing.rows[0].room_id;
 
-      const session_date = DateTime.fromISO(inicio, { zone: timezone }).toISODate();
-
-      // Buscar si ya hay sala en ese día
-      let room_id = s.room_id || uuidv4();
-      let isNewRoom = true;
-
-      const existing = await db.execute(
-        `SELECT room_id FROM llamadas_mot 
-         WHERE course_id = ? AND DATE(start_time) = ?`,
-        [course_id, session_date]
+      await db.execute(
+        `UPDATE llamadas_mot SET start_time = ?, end_time = ?, title = ? WHERE room_id = ?`,
+        [startUTC, endUTC, title || "Clase", room_id]
       );
 
-      if (existing.rows.length > 0) {
-        room_id = existing.rows[0].room_id;
-        isNewRoom = false;
-      }
-
-      // Token para acceso a la sala
       const token = jwt.sign({ room_id, course_id }, JWT_SECRET);
       const link = `/join?token=${token}`;
 
-      if (isNewRoom) {
-        await db.execute(
-          `INSERT INTO llamadas_mot (course_id, room_id, link, start_time, end_time)
-           VALUES (?, ?, ?, ?, ?)`,
-          [course_id, room_id, link, startUTC.toISO(), endUTC.toISO()]
-        );
-      } else {
-        await db.execute(
-          `UPDATE llamadas_mot 
-           SET start_time = ?, end_time = ?, link = ? 
-           WHERE room_id = ?`,
-          [startUTC.toISO(), endUTC.toISO(), link, room_id]
-        );
-      }
-
-      results.push({
-        inicio,
-        final,
-        titulo,
-        type,
-        timezone,
+      return res.json({
         room_id,
         link,
-        status: "success",
-        action: isNewRoom ? "created" : "updated",
+        message: "Sala actualizada exitosamente",
       });
     }
 
-    return res.json({ results });
+    const room_id = uuidv4();
+    const token = jwt.sign({ room_id, course_id }, JWT_SECRET);
+    const link = `/join?token=${token}`;
+
+    await db.execute(
+      `INSERT INTO llamadas_mot (course_id, room_id, link, start_time, end_time)
+       VALUES (?, ?, ?, ?, ?)`,
+      [course_id, room_id, link, startUTC, endUTC]
+    );
+
+    res.json({
+      room_id,
+      link,
+      message: "Sala creada exitosamente",
+    });
   } catch (err) {
-    console.error("Error crítico en /api/calls:", err);
-    return res.status(500).json({ error: "Error al procesar las salas" });
+    console.error("Error en /api/calls:", err);
+    res.status(500).json({ error: "Error al crear/actualizar la sala" });
   }
 });
 
-// ================================
-// 📌 Acceso a la sala (/join)
-// ================================
-router.get("/join", async (req, res) => {
-  const { token, user_token } = req.query;
 
+// Ingresar a sala con validación horaria con margen de ±2 minutos
+router.get("/join", async (req, res) => {
+  const { token } = req.query;
   if (!token) {
-    return res.render("inactive", { error: "Token de sala faltante" });
+    return res.render("inactive", { error: "Token faltante" });
   }
 
   let payload;
   try {
     payload = jwt.verify(token, JWT_SECRET);
   } catch {
-    return res.render("inactive", { error: "Token de sala inválido o expirado" });
+    return res.render("inactive", { error: "Token inválido o expirado" });
   }
 
-  // Token del usuario (proxy MOT lo pasa en ?auth=...)
-  const userJwt =
-    user_token ||
-    req.cookies.mot_user_token ||
-    req.cookies.token ||
-    req.headers.authorization?.split(" ")[1];
+  const userJwt = req.cookies.token || req.headers.authorization?.split(" ")[1];
+  let userPayload = null;
+  let userRole = null;
+  let userName = null;
 
-  let userData = {};
   if (userJwt) {
     try {
-      userData = jwt.verify(userJwt, JWT_SECRET);
-    } catch {
-      userData = {};
+      userPayload = jwt.verify(userJwt, JWT_SECRET);
+      userRole = userPayload.role;
+      userName = userPayload.nombre;
+    } catch (err) {
+      console.warn("Token de usuario inválido:", err.message);
     }
   }
 
   try {
-    const roomResult = await db.execute(
+    const result = await db.execute(
       `SELECT * FROM llamadas_mot WHERE room_id = ?`,
       [payload.room_id]
     );
-    const room = roomResult.rows[0];
-    if (!room) {
+    const row = result.rows[0];
+
+    if (!row) {
       return res.render("inactive", { error: "Sala no encontrada" });
     }
 
-    // Validar horario
-    const nowUTC = DateTime.utc();
-    const startUTC = DateTime.fromISO(room.start_time, { zone: "utc" });
-    const endUTC = DateTime.fromISO(room.end_time, { zone: "utc" });
+    const now = DateTime.utc();
+    const start = DateTime.fromISO(row.start_time, { zone: "utc" }).minus({ minutes: 2 });
+    const end = DateTime.fromISO(row.end_time, { zone: "utc" }).plus({ minutes: 2 });
 
-    if (nowUTC < startUTC) {
-      return res.render("inactive", { error: "La sala aún no está disponible" });
-    }
-    if (nowUTC > endUTC) {
-      return res.render("inactive", { error: "La sesión ha finalizado" });
+
+    if (now < start || now > end) {
+      return res.render("inactive", { error: "Sala fuera de horario" });
     }
 
-    // Validar acceso al curso vía MOT
-    if (userData.id) {
-      try {
-        const apiUrl = `${process.env.MOT_API_URL}/api/validate-course-access/${userData.id}/${room.course_id}`;
-        const { data } = await axios.get(apiUrl, {
-          headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
-          timeout: 8000,
-        });
-        if (!data.allowed) {
-          return res.render("inactive", { error: "No estás autorizado para esta sala" });
-        }
-      } catch {
-        return res.render("inactive", { error: "Error verificando acceso al curso" });
+    // Obtener nombre si no viene en el token
+    if (!userName && userPayload?.id) {
+      const userResult = await db.execute(
+        "SELECT nombre FROM usuarios WHERE id = ?",
+        [userPayload.id]
+      );
+      if (userResult.rows.length > 0) {
+        userName = userResult.rows[0].nombre;
       }
     }
-
-    // Si es profesor, cargar módulos
-    let modules = [];
-    if (userData.rol === "profesor") {
-      try {
-        const response = await axios.get(
-          `${process.env.MOT_API_URL}/courses/${room.course_id}/modules/${userData.id}`,
-          {
-            headers: { Authorization: `Bearer ${process.env.INTERNAL_API_KEY}` },
-            timeout: 8000,
-          }
-        );
-        modules = response.data || [];
-      } catch (err) {
-        console.error("Error obteniendo módulos:", err.message);
-      }
-    }
-
-    // Horario en local (Bogotá)
-    const localStart = startUTC.setZone("America/Bogota");
-    const localEnd = endUTC.setZone("America/Bogota");
-    const localNow = nowUTC.setZone("America/Bogota");
-
-    const schedule = {
-      start: localStart.toFormat("h:mm a"),
-      end: localEnd.toFormat("h:mm a"),
-      date: localStart.toFormat("d 'de' LLLL 'de' y"),
-    };
 
     return res.render("room", {
       roomId: payload.room_id,
       fromMot: true,
-      userRole: userData.rol,
-      isAdmin: userData.rol === "profesor",
-      userName: userData.nombre || userData.email || "Usuario",
-      listModulesCourse: modules,
-      schedule,
-      currentTime: localNow.toFormat("d 'de' LLLL 'de' y 'a las' h:mm a"),
+      userRole,
+      isAdmin: userRole === "profesor",
+      userName: userName || userPayload?.email || "Usuario",
     });
   } catch (err) {
-    console.error("Error crítico en /join:", err);
-    return res.render("inactive", {
-      error: "Error interno del servidor. Por favor intente nuevamente.",
-    });
+    console.error("Error en /join:", err.message);
+    return res.render("inactive", { error: "Error en el servidor" });
   }
 });
 

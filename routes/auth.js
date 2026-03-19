@@ -11,12 +11,9 @@ const oAuth2Client = new OAuth2Client(
 );
 
 router.get("/", (req, res) => res.render("login"));
-router.get("/login", (req, res) => res.render("login"));
-
 
 router.post("/login", async (req, res) => {
   const { userName, password } = req.body;
-  if (!userName || !password || userName.trim() === "" || password.trim() === "") return res.redirect("/");
   try {
     const result = await db.execute(
       "SELECT * FROM users WHERE nombre = ? AND contraseña = ?",
@@ -38,7 +35,7 @@ router.get("/signup", (req, res) => {
 
 router.post("/signup", async (req, res) => {
   const { userName, email, password, isAdmin } = req.body;
-  if (!userName || !email || !password || userName.trim() === "" || email.trim() === "" || password.trim() === "") return res.redirect("/signup");
+  if (!userName || !email || !password) return res.redirect("/signup");
 
   try {
     const nameExist = await db.execute(
@@ -118,7 +115,7 @@ router.get("/auth/google/callback", async (req, res) => {
 router.post("/choose-username", async (req, res) => {
   const { userName, password } = req.body;
 
-  if (!req.session?.googleEmail || !userName || !password || userName.trim() === "" || password.trim() === "") {
+  if (!req.session?.googleEmail || !userName || !password) {
     return res.redirect("/choose-username?error=missing_data");
   }
 
