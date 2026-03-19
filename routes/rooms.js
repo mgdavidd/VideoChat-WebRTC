@@ -26,11 +26,6 @@ router.get("/rooms-form", async (req, res) => {
     )
   ).filter(Boolean);
 
-  const userResult = await db.execute(
-    "SELECT is_admin FROM users WHERE nombre = ?",
-    [userName]
-  );
-
   const myRooms = await db.execute(
     "SELECT r.id FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ?",
     [userName]
@@ -39,7 +34,7 @@ router.get("/rooms-form", async (req, res) => {
 
   res.render("room-form", {
     userName: req.cookies.userName,
-    isAdmin: userResult.rows.length > 0 && userResult.rows[0].is_admin === 1,
+    isAdmin: req.isAdmin || false,
     activesRooms,
     allRooms: rooms,
     ownersRooms
