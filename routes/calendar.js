@@ -25,18 +25,15 @@ router.post("/fechas", async (req, res) => {
   const { fechas = [], selectedDates = [], roomId = "1" } = req.body;
   const userName = req.session.userName;
 
-  if (!Array.isArray(fechas)) {
-    return res.status(400).json({ error: "Formato inválido" });
-  }
+  if (!Array.isArray(fechas)) return res.status(400).json({ error: "Formato inválido" });
 
+  // Solo admin de la sala puede editar.
   try {
     const owner = await db.execute(
       "SELECT 1 FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ? AND r.id = ?",
       [userName, roomId]
     );
-    if (!owner.rows.length) {
-      return res.status(403).json({ error: "No eres el administrador de esta sala" });
-    }
+    if (!owner.rows.length) return res.status(403).json({ error: "No eres admin de esta sala" });
   } catch (err) {
     console.error("Error verificando dueño de sala:", err);
     return res.status(500).json({ error: "Error del servidor" });
@@ -88,16 +85,39 @@ router.post("/fechas", async (req, res) => {
 router.get("/fechas/:roomId", async (req, res) => {
   try {
     const limiteInferior = DateTime.utc().minus({ weeks: 2 }).toISO();
-    const result = await db.execute(
-      `SELECT f.fecha_inicial_utc, f.fecha_final_utc, f.tipo, f.fecha_local, 
-              g.direccion AS grabacion_url, g.titulo AS grabacion_titulo, g.es_publico
-       FROM fechas f
-       LEFT JOIN grabaciones g ON g.fecha_id = f.id
-       WHERE f.roomId = ? AND f.fecha_final_utc >= ?
-       ORDER BY f.fecha_inicial_utc ASC`,
+
+    const fechasResult = await db.execute(
+      `SELECT id, fecha_inicial_utc, fecha_final_utc, tipo, fecha_local
+       FROM fechas
+       WHERE roomId = ? AND fecha_final_utc >= ?
+       ORDER BY fecha_inicial_utc ASC`,
       [req.params.roomId, limiteInferior]
     );
-    res.json(result.rows);
+
+    const grabacionesResult = await db.execute(
+      `SELECT g.fecha_id, g.titulo, g.direccion, g.es_publico
+       FROM grabaciones g
+       JOIN fechas f ON g.fecha_id = f.id
+       WHERE f.roomId = ? AND f.fecha_final_utc >= ?`,
+      [req.params.roomId, limiteInferior]
+    );
+
+    // Agrupar grabaciones por fecha_id (una fecha puede tener varias)
+    const porFecha = {};
+    for (const g of grabacionesResult.rows) {
+      (porFecha[g.fecha_id] ||= []).push({
+        titulo: g.titulo,
+        direccion: g.direccion,
+        es_publico: g.es_publico,
+      });
+    }
+
+    const fechas = fechasResult.rows.map((f) => ({
+      ...f,
+      grabaciones: porFecha[f.id] || [],
+    }));
+
+    res.json(fechas);
   } catch (err) {
     console.error("Error obteniendo fechas:", err);
     res.status(500).json({ error: "Error del servidor" });
