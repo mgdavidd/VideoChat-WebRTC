@@ -80,8 +80,8 @@
             const end = endDate.toFormat("HH:mm");
 
             dateEvents[date] = f.tipo;
-            // Guarda también grabacion_url
-            hoursByDate[date] = { start, end, grabacion_url: f.grabacion_url, titulo: f.grabacion_titulo, es_publico: f.es_publico };
+            // Una fecha puede tener varias grabaciones (reconexiones, reintentos, etc.)
+            hoursByDate[date] = { start, end, grabaciones: f.grabaciones || [] };
           });
 
           calendar.value = Object.keys(dateEvents).join(" ");
@@ -124,7 +124,8 @@
 
         sortedDates.forEach((date) => {
           const eventType = dateEvents[date];
-          const { start = "", end = "", grabacion_url, titulo, es_publico } = hoursByDate[date] || {};
+          const { start = "", end = "", grabaciones = [] } = hoursByDate[date] || {};
+          const hayGrabaciones = grabaciones.length > 0;
 
           // Calcula si la fecha ya pasó hace más de 24h
           const fechaFin = DateTime.fromISO(date).plus({ days: 1 }); // fecha + 24h
@@ -137,72 +138,53 @@
           div.innerHTML = `
             <span class="event-type ${eventType}">${eventType.toUpperCase()}</span>
             <label>${formatDate(date)}</label>
-            <input type="time" name="start-${date}" value="${start}" required ${esPasada || isOwner === 'false' || grabacion_url ? "disabled" : ""}>
-            <input type="time" name="end-${date}" value="${end}" required ${esPasada || isOwner === 'false' || grabacion_url ? "disabled" : ""}>
-            ${
-              grabacion_url
-                ? (() => {
-                    if (!es_publico && isOwner === 'false') {
-                      return `<span style="color:#888;margin-left:10px;">(Grabación privada)</span>`;
-                    }
-                    const match = grabacion_url.match(/\/d\/([a-zA-Z0-9_-]+)\//);
-                    const fileId = match ? match[1] : null;
-                    const thumbnailUrl = fileId
-                      ? `https://drive.google.com/thumbnail?id=${fileId}`
-                      : "";
-                    return `
-  <span class="video-thumb-trigger" style="margin-left:10px;cursor:pointer;position:relative;" title="Ver grabación">
-    📹
-    ${
-      thumbnailUrl
-        ? `<div class="video-thumb-popup" style="display:none;">
-              <div class="video-title" style="font-weight:bold;font-size:14px;margin-bottom:6px;text-align:center;">
-                ${titulo ? titulo : 'Grabación'}
-              </div>
-              <img src="${thumbnailUrl}" alt="Miniatura de grabación">
-           </div>`
-        : ""
-    }
-  </span>
-  <a href="${grabacion_url}" target="_blank" style="margin-left:8px;" title="Abrir grabación en Drive">Ver en Drive</a>
-                    `;
-                  })()
-                : ""
-            }
+            <input type="time" name="start-${date}" value="${start}" required ${esPasada || isOwner === 'false' || hayGrabaciones ? "disabled" : ""}>
+            <input type="time" name="end-${date}" value="${end}" required ${esPasada || isOwner === 'false' || hayGrabaciones ? "disabled" : ""}>
+            ${grabaciones.map((g) => grabacionMarkup(g)).join("")}
           `;
 
           timeSelectorsDiv.appendChild(div);
+          attachGrabacionPopups(div, grabaciones);
+        });
+      }
 
-          // Si hay grabación, agrega eventos para mostrar la miniatura
-          if (grabacion_url && es_publico) {
-            const trigger = div.querySelector('.video-thumb-trigger');
-            const popup = div.querySelector('.video-thumb-popup');
+      // Markup de un ícono de grabación (una fecha puede tener varias)
+      function grabacionMarkup({ direccion, titulo, es_publico }) {
+        if (!es_publico && isOwner === 'false') {
+          return `<span style="color:#888;margin-left:10px;">(Grabación privada)</span>`;
+        }
+        const match = direccion.match(/\/d\/([a-zA-Z0-9_-]+)\//);
+        const fileId = match ? match[1] : null;
+        const thumbnailUrl = fileId ? `https://drive.google.com/thumbnail?id=${fileId}` : "";
+        return `
+  <span class="video-thumb-trigger" data-direccion="${direccion}" style="margin-left:10px;cursor:pointer;position:relative;" title="Ver grabación">
+    📹
+    ${thumbnailUrl ? `<div class="video-thumb-popup" style="display:none;">
+              <div class="video-title" style="font-weight:bold;font-size:14px;margin-bottom:6px;text-align:center;">${titulo || 'Grabación'}</div>
+              <img src="${thumbnailUrl}" alt="Miniatura de grabación">
+           </div>` : ""}
+  </span>
+  <a href="${direccion}" target="_blank" style="margin-left:8px;" title="Abrir grabación en Drive">Ver en Drive</a>`;
+      }
 
-            // Para mouse (hover)
-            trigger.addEventListener('mouseenter', () => {
-              popup.style.display = 'block';
-            });
-            trigger.addEventListener('mouseleave', () => {
-              popup.style.display = 'none';
-            });
+      // Engancha hover/click a cada ícono de grabación visible en el div
+      function attachGrabacionPopups(div, grabaciones) {
+        div.querySelectorAll('.video-thumb-trigger').forEach((trigger) => {
+          const popup = trigger.querySelector('.video-thumb-popup');
+          if (!popup) return;
 
-            // Para dispositivos táctiles (click/tap)
-            trigger.addEventListener('click', function (e) {
-              // Evita que el enlace se active si hay miniatura
-              if (popup) {
-                e.preventDefault();
-                // Alterna la visibilidad
-                popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
-                // Opcional: cerrar si se toca fuera
-                document.addEventListener('click', function handler(ev) {
-                  if (!trigger.contains(ev.target)) {
-                    popup.style.display = 'none';
-                    document.removeEventListener('click', handler);
-                  }
-                });
+          trigger.addEventListener('mouseenter', () => (popup.style.display = 'block'));
+          trigger.addEventListener('mouseleave', () => (popup.style.display = 'none'));
+          trigger.addEventListener('click', (e) => {
+            e.preventDefault();
+            popup.style.display = popup.style.display === 'block' ? 'none' : 'block';
+            document.addEventListener('click', function handler(ev) {
+              if (!trigger.contains(ev.target)) {
+                popup.style.display = 'none';
+                document.removeEventListener('click', handler);
               }
             });
-          }
+          });
         });
       }
 

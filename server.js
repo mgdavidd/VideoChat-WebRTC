@@ -7,21 +7,36 @@ const path = require("path");
 const dotenv = require("dotenv");
 
 dotenv.config();
+if (!process.env.SESSION_SECRET) {
+  console.error(
+    "❌ Falta SESSION_SECRET en el .env. Genera uno con, por ejemplo: `node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"` y agrégalo al .env."
+  );
+  process.exit(1);
+}
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
+
+app.set("trust proxy", 1);
 
 app.set("view engine", "ejs");
 app.use(cookieParser());
 app.use(express.json({ limit: "500mb" }));
 app.use(express.urlencoded({ extended: true, limit: "500mb" }));
 app.use(express.static(path.join(__dirname, "public")));
+
 app.use(
   session({
-    secret: process.env.SESSION_SECRET || "secretoseguro",
+    secret: process.env.SESSION_SECRET,
     resave: false,
-    saveUninitialized: true,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 1000 * 60 * 60 * 2, // 2 horas
+    },
   })
 );
 
@@ -47,7 +62,6 @@ process.on("SIGINT", () => {
   process.exit();
 });
 
-// Start
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () =>
   console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`)

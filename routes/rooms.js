@@ -16,7 +16,7 @@ async function checkRoomAvailability(roomId) {
 
 router.get("/rooms-form", async (req, res) => {
   const rooms = await db.execute("SELECT id FROM rooms");
-  const userName = req.cookies.userName;
+  const userName = req.session.userName;
   const activesRooms = (
     await Promise.all(
       rooms.rows.map(async (room) => {
@@ -33,11 +33,11 @@ router.get("/rooms-form", async (req, res) => {
   const ownersRooms = myRooms.rows.map((row) => row.id);
 
   res.render("room-form", {
-    userName: req.cookies.userName,
+    userName,
     isAdmin: req.isAdmin || false,
     activesRooms,
     allRooms: rooms,
-    ownersRooms
+    ownersRooms,
   });
 });
 
@@ -49,7 +49,7 @@ router.get("/choose-username", (req, res) =>
 
 router.post("/create-room", async (req, res) => {
   const { newRoomId } = req.body;
-  const userName = req.cookies.userName;
+  const userName = req.session.userName;
 
   if (!newRoomId || !userName) {
     return res.redirect("/rooms-form?error=missing_data");
@@ -87,7 +87,7 @@ router.post("/join", (req, res) => {
 
 router.get("/room/:id", async (req, res) => {
   const roomId = req.params.id;
-  const userName = req.cookies.userName;
+  const userName = req.session.userName;
 
   try {
     const isAdminRoom = await db.execute(
@@ -109,16 +109,9 @@ router.get("/room/:id", async (req, res) => {
   }
 });
 
-router.get("/instrucciones-admin", async (req, res) => {
-  const userName = req.cookies.userName;
-  if (!userName) return res.redirect("/login");
-  const userResult = await db.execute(
-    "SELECT is_admin FROM users WHERE nombre = ?",
-    [userName]
-  );
-  if (!userResult.rows.length || !userResult.rows[0].is_admin) {
-    return res.redirect("/rooms-form");
-  }
+router.get("/instrucciones-admin", (req, res) => {
+  if (!req.session.userName) return res.redirect("/login");
+  if (!req.isAdmin) return res.redirect("/rooms-form");
   res.render("instructions");
 });
 

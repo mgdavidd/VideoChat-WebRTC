@@ -17,6 +17,10 @@
         <p>Ese nombre de usuario ya está en uso.</p>
         <% } else if (error === 'missing_data') { %>
         <p>Faltan datos obligatorios.</p>
+        <% } else if (error === 'invalid_username') { %>
+        <p>El usuario debe tener 3-20 caracteres (letras, números, _ o -).</p>
+        <% } else if (error === 'weak_password') { %>
+        <p>La contraseña debe tener al menos 8 caracteres.</p>
         <% } else if (error === 'server') { %>
         <p>Ocurrió un error en el servidor. Intenta de nuevo.</p>
         <% } %>
