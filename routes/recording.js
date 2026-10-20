@@ -4,11 +4,10 @@ const fs = require("fs");
 const db = require("../db");
 const { upload, uploadDir } = require("../uploadConfig");
 const { DateTime } = require("luxon");
-const { getAdminDriveClient } = require("../driveUtils");
-const { google } = require("googleapis");
+const { uploadRecording } = require("../driveUtils");
 
 router.get("/my-recordings", async (req, res) => {
-  const { userName } = req.cookies;
+  const userName = req.session.userName;
   try {
     const result = await db.execute(
       `SELECT g.id, g.fecha_id, g.titulo, g.direccion, g.es_publico, 
@@ -39,30 +38,20 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
     const { roomId, adminUserName } = req.body;
     if (!roomId || !adminUserName) throw new Error("Datos incompletos");
 
-    const { auth, folderId } = await getAdminDriveClient(adminUserName);
-    const drive = google.drive({ version: "v3", auth });
-
-    const { data } = await drive.files.create({
-      requestBody: {
-        name: `Grabacion-${roomId}-${Date.now()}.webm`,
-        mimeType: "video/webm",
-        parents: [folderId],
-      },
-      media: {
-        mimeType: "video/webm",
-        body: fs.createReadStream(req.file.path),
-      },
-      fields: "id,webViewLink",
-    });
+    const { data } = await uploadRecording(adminUserName, roomId, req.file.path);
 
     const now = DateTime.utc();
-    const fechaLocal = now.toISODate();
+
 
     const fechaResult = await db.execute(
-      "SELECT id FROM fechas WHERE roomId = ? AND fecha_local = ?",
-      [roomId, fechaLocal]
+      "SELECT id FROM fechas WHERE roomId = ? AND ? BETWEEN fecha_inicial_utc AND fecha_final_utc",
+      [roomId, now.toISO()]
     );
-    const fechaId = fechaResult.rows[0]?.id || null;
+    const fechaId = fechaResult.rows[0]?.id;
+
+    if (!fechaId) {
+      throw new Error("No hay una fecha programada activa para esta sala ahora mismo");
+    }
 
     await db.execute(
       "INSERT INTO grabaciones (fecha_id, titulo, direccion, es_publico) VALUES (?, ?, ?, ?)",
@@ -97,7 +86,20 @@ router.post("/api/upload-recording", upload.single("recording"), async (req, res
 router.post("/update-recording/:recordingId", async (req, res) => {
   const { recordingId } = req.params;
   const { title, es_publico } = req.body;
+  const userName = req.session.userName;
+
   try {
+    // Solo el admin de la sala que contiene la grabación puede editarla.
+    const owns = await db.execute(
+      `SELECT 1 FROM grabaciones g
+       JOIN fechas f ON g.fecha_id = f.id
+       JOIN rooms r ON f.roomId = r.id
+       JOIN users u ON r.admin = u.id
+       WHERE g.id = ? AND u.nombre = ?`,
+      [recordingId, userName]
+    );
+    if (!owns.rows.length) return res.status(403).json({ error: "No puedes editar esta grabación" });
+
     await db.execute(
       "UPDATE grabaciones SET titulo = ?, es_publico = ? WHERE id = ?",
       [title, es_publico ? 1 : 0, recordingId]

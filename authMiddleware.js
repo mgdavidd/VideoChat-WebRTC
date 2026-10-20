@@ -1,6 +1,3 @@
-// authMiddleware.js
-const db = require("./db");
-
 const allowedPaths = [
   "/",
   "/signup",
@@ -14,22 +11,16 @@ const allowedPaths = [
   "/privacidad",
 ];
 
-const authMiddleware = async (req, res, next) => {
-  if (!req.cookies.userName && !allowedPaths.includes(req.path)) {
-    return res.redirect("/");
-  }
+const authMiddleware = (req, res, next) => {
+  const userName = req.session?.userName;
 
-  if (req.cookies.userName) {
-    try {
-      const result = await db.execute(
-        "SELECT is_admin FROM users WHERE nombre = ?",
-        [req.cookies.userName]
-      );
-      req.isAdmin = result.rows[0]?.is_admin === 1;
-    } catch (err) {
-      console.error("Error verificando admin:", err);
-      return res.status(500).send("Error interno");
-    }
+  const isPublic = allowedPaths.includes(req.path);
+
+  if (!userName && !isPublic) return res.redirect("/");
+
+  if (userName) {
+    req.isAdmin = !!req.session.isAdmin;
+    req.userName = userName;
   }
   next();
 };

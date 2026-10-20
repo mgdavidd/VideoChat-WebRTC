@@ -18,18 +18,20 @@
       <% if (errorEmail) { %>
         <div class="error-message"><%= errorEmail %></div>
       <% } %>
-      <input type="password" name="password" placeholder="Contraseña" required />
+      <input type="password" name="password" placeholder="Contraseña (mínimo 8 caracteres)" required minlength="8" />
+
       <label for="isAdmin">
         <input type="checkbox" name="isAdmin" id="isAdmin" />
-        Eres Administrador (necesitarás conectar Google Drive)
+        Eres Administrador (puedes crear salas y grabar llamadas)
       </label>
+
       <button type="submit">Registrarse</button>
     </form>
     <div class="extra-link">
       ¿Ya tienes cuenta? <a href="/">Inicia sesión</a>
     </div>
     <button onclick="window.location.href='/auth/google'" class="google-log">
-      Regístrate con Google <br><small>(si no eres administrador)</small>
+      Regístrate con Google
     </button>
   </div>
 </body>

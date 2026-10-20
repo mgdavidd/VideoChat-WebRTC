@@ -5,7 +5,7 @@ const { DateTime } = require("luxon");
 
 router.get("/calendar-form/:roomId", async (req, res) => {
   const { roomId } = req.params;
-  const { userName } = req.cookies;
+  const userName = req.session.userName;
 
   const result = await db.execute("SELECT 1 FROM rooms WHERE id = ?", [roomId]);
   const owner = await db.execute(
@@ -17,15 +17,29 @@ router.get("/calendar-form/:roomId", async (req, res) => {
   if (result.rows.length > 0) {
     return res.render("calendar", { roomId, isOwner });
   } else {
-    return res.status(404).render("error-calendar", {message: "La sala no existe"});
+    return res.status(404).render("error-calendar", { message: "La sala no existe" });
   }
 });
 
 router.post("/fechas", async (req, res) => {
   const { fechas = [], selectedDates = [], roomId = "1" } = req.body;
+  const userName = req.session.userName;
 
   if (!Array.isArray(fechas)) {
     return res.status(400).json({ error: "Formato inválido" });
+  }
+
+  try {
+    const owner = await db.execute(
+      "SELECT 1 FROM rooms r JOIN users u ON r.admin = u.id WHERE u.nombre = ? AND r.id = ?",
+      [userName, roomId]
+    );
+    if (!owner.rows.length) {
+      return res.status(403).json({ error: "No eres el administrador de esta sala" });
+    }
+  } catch (err) {
+    console.error("Error verificando dueño de sala:", err);
+    return res.status(500).json({ error: "Error del servidor" });
   }
 
   try {
